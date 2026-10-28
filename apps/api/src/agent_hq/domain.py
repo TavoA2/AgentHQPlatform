@@ -30,6 +30,33 @@ class ApprovalStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class KnowledgeScope(StrEnum):
+    COMPANY = "company"
+    PROJECT = "project"
+
+
+class KnowledgeTrust(StrEnum):
+    APPROVED = "approved"  # written or approved by a human
+    UNVERIFIED = "unverified"  # agent-generated, awaiting review
+    REJECTED = "rejected"
+    ARCHIVED = "archived"
+
+
+KNOWLEDGE_KINDS = (
+    "company_profile",
+    "service",
+    "policy",
+    "brand",
+    "procedure",
+    "decision",
+    "requirement",
+    "architecture",
+    "constraint",
+    "note",
+    "execution_summary",
+)
+
+
 class RiskLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"

@@ -19,9 +19,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from agent_hq.domain import DomainError
+from agent_hq.domain import DomainError, KnowledgeScope
 from agent_hq.events import record_audit, record_task_event
 from agent_hq.integrations.github import GitHubError, is_ci_relevant, is_secret_path
+from agent_hq.knowledge import KnowledgeError, agent_search, create_document
 from agent_hq.llm.base import ToolSchema
 from agent_hq.runtime import Runtime
 from agent_hq.sandbox.client import SandboxError
@@ -122,6 +123,17 @@ class RunTestsArgs(RepoArgs):
     )
 
 
+class KnowledgeSearchArgs(BaseModel):
+    query: str = Field(min_length=2, max_length=300)
+    limit: int = Field(default=5, ge=1, le=8)
+
+
+class KnowledgeProposeArgs(BaseModel):
+    title: str = Field(min_length=3, max_length=200)
+    content: str = Field(min_length=10, max_length=5000)
+    kind: Literal["decision", "requirement", "architecture", "constraint", "note"] = "note"
+
+
 class PublishReportArgs(BaseModel):
     target: str = Field(max_length=300)
     task_id: str
@@ -210,6 +222,41 @@ async def _run_tests(ctx: ToolContext, args: RunTestsArgs) -> dict[str, Any]:
     return {"workspace_files": sorted(files), **result.model_dump()}
 
 
+async def _knowledge_search(ctx: ToolContext, args: KnowledgeSearchArgs) -> dict[str, Any]:
+    # Scope comes from the task context: company + this task's project, never from the model.
+    async with ctx.runtime.sessionmaker() as session:
+        hits = await agent_search(
+            session,
+            project_id=ctx.project_id,
+            agent_key=ctx.agent_key,
+            text=args.query,
+            limit=args.limit,
+        )
+    return {
+        "results": [h.for_agent() for h in hits],
+        "note": "unverified entries are agent-written and not confirmed facts",
+    }
+
+
+async def _knowledge_propose(ctx: ToolContext, args: KnowledgeProposeArgs) -> dict[str, Any]:
+    async with ctx.runtime.sessionmaker() as session:
+        try:
+            doc = await create_document(
+                session,
+                scope=KnowledgeScope.PROJECT,
+                project_id=ctx.project_id,
+                kind=args.kind,
+                title=args.title,
+                content=args.content,
+                agent_key=ctx.agent_key,
+                source_task_id=ctx.task_id,
+            )
+        except KnowledgeError as exc:
+            raise PolicyDenied(str(exc)) from exc
+        await session.commit()
+    return {"id": str(doc.id), "trust": doc.trust.value, "awaiting_human_review": True}
+
+
 async def _publish_report(ctx: ToolContext, args: PublishReportArgs) -> dict[str, Any]:
     async with ctx.runtime.sessionmaker() as session:
         result = await ctx.runtime.publisher.publish(
@@ -289,6 +336,28 @@ TOOLS: dict[str, ToolSpec] = {
             420,
             3,
             _run_tests,
+        ),
+        ToolSpec(
+            "knowledge.search",
+            "Search company knowledge and this project's knowledge (The Brain). Results carry "
+            "a trust label; unverified entries are not confirmed facts.",
+            KnowledgeSearchArgs,
+            SideEffect.READ,
+            True,
+            15,
+            5,
+            _knowledge_search,
+        ),
+        ToolSpec(
+            "knowledge.propose",
+            "Propose a new project knowledge entry (decision, requirement, ...). It stays "
+            "unverified until a human approves it.",
+            KnowledgeProposeArgs,
+            SideEffect.INTERNAL_WRITE,
+            False,
+            15,
+            3,
+            _knowledge_propose,
         ),
         ToolSpec(
             "report.publish_external",

@@ -77,7 +77,7 @@ Check: `decided_by IS NOT NULL` when status in (approved, rejected).
 allowed_repos), secret_ref (name of the secret, never the value), scopes (text[]),
 enabled, created_at, updated_at`
 
-### knowledge_documents (Sprint 3; designed now)
+### knowledge_documents (Sprint 3, implemented — see ADR-0012)
 `id, scope ('company'|'project'), project_id (required iff scope='project'), title,
 kind, current_version_id, trust ('approved'|'unverified'), created_by_user_id |
 created_by_agent_id, created_at, updated_at`

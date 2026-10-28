@@ -27,16 +27,19 @@ from agent_hq.agents import CIO
 from agent_hq.domain import (
     ApprovalStatus,
     ExecutionStatus,
+    KnowledgeScope,
     RiskLevel,
     TaskCancelledError,
     TaskStatus,
 )
 from agent_hq.events import record_task_event
+from agent_hq.knowledge import KnowledgeError, agent_search, create_document
 from agent_hq.llm.base import ChatMessage, ModelRequest
 from agent_hq.models import (
     Agent,
     ApprovalRequest,
     Integration,
+    KnowledgeDocument,
     Project,
     Task,
     TaskExecution,
@@ -347,6 +350,12 @@ def build_cio_graph(
         resolved = runtime.models.resolve(
             agent_key=CIO.key, profile=CIO.model_profile, task_override=state.get("model_override")
         )
+        # The Brain: company + this project's knowledge relevant to the request.
+        async with sm() as session:
+            hits = await agent_search(
+                session, project_id=project_id, agent_key=CIO.key, text=state["request"], limit=5
+            )
+        knowledge = [h.for_agent() for h in hits]
         request = ModelRequest(
             purpose="cio.analyze",
             model=resolved.model,
@@ -360,11 +369,13 @@ def build_cio_graph(
                             "acceptance_criteria": state.get("acceptance_criteria", []),
                             "authorized_repositories": allowed,
                         }
-                    ),
+                    )
+                    + "\n\nRelevant knowledge:\n"
+                    + prompts.wrap_untrusted("knowledge.search", json.dumps(knowledge)),
                 ),
             ],
             output_schema=Requirements,
-            hints={"request": state["request"], "allowed_repos": allowed},
+            hints={"request": state["request"], "allowed_repos": allowed, "knowledge": knowledge},
         )
         response = await resolved.provider.complete(request)
         await record_model_call(
@@ -402,7 +413,13 @@ def build_cio_graph(
         }
         async with sm() as session:
             await _locked_task(session, task_id)
-            await _step_event(session, state, "analyze", requirements=result)
+            await _step_event(
+                session,
+                state,
+                "analyze",
+                requirements=result,
+                knowledge_used=[k["id"] for k in knowledge],
+            )
             await session.commit()
         if missing:
             return {
@@ -906,6 +923,7 @@ def build_cio_graph(
                 parent_id=task_id,
                 output={"summary": state.get("summary")},
             )
+            await _remember_outcome(session, task, state)
             await session.commit()
         return {}
 
@@ -966,6 +984,43 @@ def build_cio_graph(
     graph.add_edge("complete", END)
     graph.add_edge("fail", END)
     return graph.compile(checkpointer=checkpointer)
+
+
+async def _remember_outcome(session: AsyncSession, task: Task, state: CioState) -> None:
+    """Agent execution memory: an unverified project note a human can promote to fact."""
+    run_tag = f"run-{task.run_number}"
+    existing = await session.scalar(
+        select(KnowledgeDocument.id).where(
+            KnowledgeDocument.source_task_id == task.id,
+            KnowledgeDocument.kind == "execution_summary",
+            KnowledgeDocument.tags.contains([run_tag]),
+        )
+    )
+    if existing is not None:
+        return
+    summary = state.get("summary") or {}
+    lines = [
+        f"Request: {task.request}",
+        f"Workflow: {state.get('workflow')} on {state['requirements']['repository']}",
+        f"Outcome: {summary.get('outcome', '')}",
+        *(f"Risk: {r}" for r in summary.get("risks", [])),
+        *(f"Next step: {n}" for n in summary.get("next_steps", [])),
+    ]
+    try:
+        await create_document(
+            session,
+            scope=KnowledgeScope.PROJECT,
+            project_id=task.project_id,
+            kind="execution_summary",
+            title=f"Outcome: {task.title}",
+            content="\n".join(lines),
+            agent_key=CIO.key,
+            source_task_id=task.id,
+            tags=[str(state.get("workflow")), run_tag],
+        )
+    except KnowledgeError:
+        # Memory is best-effort: an unrecordable summary must not undo a verified result.
+        return
 
 
 def _kind_of(state: CioState, step_id: str) -> str:

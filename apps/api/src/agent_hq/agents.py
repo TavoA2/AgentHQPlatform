@@ -23,13 +23,15 @@ class AgentDefinition:
     can_delegate_to: frozenset[str] = frozenset()
 
 
+KNOWLEDGE_TOOLS = frozenset({"knowledge.search", "knowledge.propose"})
+
 CIO = AgentDefinition(
     key="cio",
-    display_name="AI CIO",
+    display_name="Dixon",
     department="executive",
     model_profile="reasoning",
-    description="Coordinates requests, plans work, delegates, verifies and reports.",
-    allowed_tools=frozenset({"report.publish_external", "changeset.propose"}),
+    description="AI CIO: coordinates requests, plans work, delegates, verifies and reports.",
+    allowed_tools=frozenset({"report.publish_external", "changeset.propose"}) | KNOWLEDGE_TOOLS,
     can_delegate_to=frozenset({"devops", "software_engineer", "qa"}),
 )
 
@@ -39,7 +41,8 @@ DEVOPS = AgentDefinition(
     department="engineering",
     model_profile="reasoning",
     description="Reviews CI/CD and infrastructure configuration (read-only).",
-    allowed_tools=frozenset({"github.list_tree", "github.read_file", "github.list_workflow_runs"}),
+    allowed_tools=frozenset({"github.list_tree", "github.read_file", "github.list_workflow_runs"})
+    | KNOWLEDGE_TOOLS,
 )
 
 SOFTWARE_ENGINEER = AgentDefinition(
@@ -48,7 +51,7 @@ SOFTWARE_ENGINEER = AgentDefinition(
     department="engineering",
     model_profile="reasoning",
     description="Designs and writes code changes with tests; proposes them, never pushes.",
-    allowed_tools=frozenset({"github.list_tree", "github.read_source"}),
+    allowed_tools=frozenset({"github.list_tree", "github.read_source"}) | KNOWLEDGE_TOOLS,
 )
 
 QA = AgentDefinition(
@@ -57,7 +60,8 @@ QA = AgentDefinition(
     department="quality",
     model_profile="reasoning",
     description="Plans tests, runs them in the isolated sandbox and reports with evidence.",
-    allowed_tools=frozenset({"github.list_tree", "github.read_source", "sandbox.run_tests"}),
+    allowed_tools=frozenset({"github.list_tree", "github.read_source", "sandbox.run_tests"})
+    | KNOWLEDGE_TOOLS,
 )
 
 REGISTRY: dict[str, AgentDefinition] = {a.key: a for a in (CIO, DEVOPS, SOFTWARE_ENGINEER, QA)}

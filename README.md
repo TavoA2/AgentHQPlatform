@@ -4,7 +4,9 @@ Internal AI virtual operations platform for **Veltrix Labs** (provisional brand)
 administrator supervises specialized AI agents that plan, execute and report real work,
 with human approval for sensitive actions.
 
-> Status: **Sprint 2 — multi-agent collaboration.** The AI CIO (LangGraph) routes each
+> Status: **Sprint 3 — The Brain.** Agents now share scoped, versioned company and project
+> knowledge with provenance; what they write stays unverified until you approve it.
+> The AI CIO, **Dixon** (LangGraph), routes each
 > request to a workflow and delegates it as subtasks: a DevOps agent reviews CI/CD, or a
 > Software Engineer and a QA agent work in parallel on a code change that QA tests in an
 > isolated Docker sandbox. Results are verified by code, a human approves the outbound
@@ -63,7 +65,8 @@ Open http://localhost:3000, sign in, then:
    - "Implement a slugify helper in owner/name with tests." (Software Engineer + QA)
 3. Watch the office, the plan and the event log update live; approve in **Approvals**;
    read the verified result (findings, or changeset + QA sandbox run) on the task page.
-   **Operations** shows queue, failures and per-agent usage.
+   **Operations** shows queue, failures and per-agent usage. **Brain** holds company and
+   project knowledge: add your services and policies there; Dixon uses them when planning.
 
 Without `OPENAI_API_KEY` and model profiles the deterministic **mock** provider is used
 (rule-based output over the real files). To use OpenAI, see `.env.example`.
@@ -77,4 +80,5 @@ Full setup, host-based development and verification commands:
   [Data model](docs/architecture/data-model.md) · [Agents](docs/architecture/agents.md)
 - [Threat model](docs/security/threat-model.md) · [Permission matrix](docs/security/permission-matrix.md)
 - [Decisions (ADRs)](docs/decisions/README.md) · [Dependencies](docs/dependencies.md)
-- [Sprint 1 acceptance criteria and evidence](docs/sprints/sprint-1-acceptance.md)
+- Acceptance and evidence: [Sprint 1](docs/sprints/sprint-1-acceptance.md) ·
+  [Sprint 2](docs/sprints/sprint-2-acceptance.md) · [Sprint 3](docs/sprints/sprint-3-acceptance.md)

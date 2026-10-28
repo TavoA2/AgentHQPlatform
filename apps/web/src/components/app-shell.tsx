@@ -12,6 +12,7 @@ const NAV = [
   { href: "/", label: "Office" },
   { href: "/tasks", label: "Tasks" },
   { href: "/approvals", label: "Approvals" },
+  { href: "/knowledge", label: "Brain" },
   { href: "/projects", label: "Projects" },
   { href: "/operations", label: "Operations" },
 ];

@@ -8,7 +8,17 @@ from fastapi import FastAPI, Request, Response
 
 from agent_hq import __version__
 from agent_hq.agents import seed_agents
-from agent_hq.api import agents, approvals, auth, events, health, metrics, projects, tasks
+from agent_hq.api import (
+    agents,
+    approvals,
+    auth,
+    events,
+    health,
+    knowledge,
+    metrics,
+    projects,
+    tasks,
+)
 from agent_hq.api.events import EventBroadcaster
 from agent_hq.config import Settings, get_settings
 from agent_hq.db import create_engine, create_sessionmaker
@@ -46,7 +56,7 @@ def create_app(settings: Settings | None = None, *, start_background: bool = Tru
         docs_url=None if settings.environment == "production" else "/docs",
         redoc_url=None,
     )
-    for module in (health, auth, projects, tasks, agents, approvals, events, metrics):
+    for module in (health, auth, projects, tasks, agents, approvals, events, metrics, knowledge):
         app.include_router(module.router)
 
     @app.middleware("http")

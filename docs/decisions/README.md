@@ -16,3 +16,4 @@ Format: Context → Decision → Consequences. Status is `Accepted`, `Proposed` 
 | [0009](0009-execution-sandboxing.md) | Code/shell execution sandboxing | Accepted (option 1) |
 | [0010](0010-sprint-1-refinements.md) | No token budget, checkpointer setup, initial models | Accepted |
 | [0011](0011-multi-agent-plans-and-sandbox.md) | Multi-agent plans, parallel waves, sandbox runner | Accepted |
+| [0012](0012-the-brain.md) | The Brain: scoped, versioned knowledge with provenance | Accepted |

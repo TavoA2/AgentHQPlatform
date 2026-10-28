@@ -232,3 +232,54 @@ export type Agent = {
   last_execution: Execution | null;
   allowed_tools: string[];
 };
+
+export type KnowledgeTrust = "approved" | "unverified" | "rejected" | "archived";
+
+export const KNOWLEDGE_KINDS = [
+  "company_profile",
+  "service",
+  "policy",
+  "brand",
+  "procedure",
+  "decision",
+  "requirement",
+  "architecture",
+  "constraint",
+  "note",
+  "execution_summary",
+] as const;
+
+export type KnowledgeDoc = {
+  id: string;
+  scope: "company" | "project";
+  project_id: string | null;
+  kind: string;
+  title: string;
+  content: string;
+  trust: KnowledgeTrust;
+  audience: string[];
+  tags: string[];
+  version: number;
+  created_by_user_id: string | null;
+  created_by_agent: string | null;
+  source_task_id: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type KnowledgeHit = KnowledgeDoc & { rank: number; snippet: string };
+
+export type KnowledgeVersion = {
+  version: number;
+  title: string;
+  content: string;
+  trust: KnowledgeTrust;
+  changed_by_user_id: string | null;
+  changed_by_agent: string | null;
+  source_task_id: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+export type KnowledgeDetail = KnowledgeDoc & { versions: KnowledgeVersion[] };

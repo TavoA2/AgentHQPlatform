@@ -9,6 +9,7 @@ from typing import Any, ClassVar
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Computed,
     DateTime,
     Enum,
     ForeignKey,
@@ -21,7 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from agent_hq.domain import (
@@ -29,6 +30,8 @@ from agent_hq.domain import (
     ExecutionStatus,
     JobKind,
     JobStatus,
+    KnowledgeScope,
+    KnowledgeTrust,
     RiskLevel,
     TaskStatus,
 )
@@ -282,3 +285,77 @@ class Job(Base):
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
     __table_args__ = (Index("ix_jobs_status_run_after", "status", "run_after"),)
+
+
+class KnowledgeDocument(Base):
+    """The Brain (ADR-0012). Current content lives here for search; history in versions."""
+
+    __tablename__ = "knowledge_documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    scope: Mapped[KnowledgeScope] = mapped_column(_enum(KnowledgeScope, "knowledge_scope"))
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE")
+    )
+    kind: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    trust: Mapped[KnowledgeTrust] = mapped_column(_enum(KnowledgeTrust, "knowledge_trust"))
+    # Agent keys allowed to read this document; empty = every agent.
+    audience: Mapped[list[str]] = mapped_column(ARRAY(String(64)), default=list)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String(64)), default=list)
+    version: Mapped[int] = mapped_column(default=1)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_by_agent: Mapped[str | None] = mapped_column(String(64))
+    source_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL")
+    )
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None]
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "setweight(to_tsvector('simple', coalesce(title, '')), 'A') || "
+            "setweight(to_tsvector('simple', coalesce(content, '')), 'B')",
+            persisted=True,
+        ),
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "(scope = 'company' AND project_id IS NULL) OR "
+            "(scope = 'project' AND project_id IS NOT NULL)",
+            name="scope_project",
+        ),
+        CheckConstraint(
+            "created_by_user_id IS NOT NULL OR created_by_agent IS NOT NULL", name="has_author"
+        ),
+        Index("ix_knowledge_documents_search", "search_vector", postgresql_using="gin"),
+        Index("ix_knowledge_documents_scope", "scope", "project_id", "trust"),
+    )
+
+
+class KnowledgeDocumentVersion(Base):
+    """Immutable history of a knowledge document (append-only, enforced by trigger)."""
+
+    __tablename__ = "knowledge_document_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("knowledge_documents.id", ondelete="CASCADE")
+    )
+    version: Mapped[int]
+    title: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    trust: Mapped[KnowledgeTrust] = mapped_column(_enum(KnowledgeTrust, "knowledge_trust"))
+    changed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    changed_by_agent: Mapped[str | None] = mapped_column(String(64))
+    source_task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL")
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    __table_args__ = (UniqueConstraint("document_id", "version"),)

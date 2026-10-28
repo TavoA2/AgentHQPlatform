@@ -35,9 +35,9 @@ Legend: ✅ allowed · 🔒 allowed only with a matching human approval (ADR-000
 | `github.merge_protected` | irreversible | ❌ | ❌ | ❌ | ❌ | human only |
 | `sandbox.run_tests` | isolated_execution | ❌ | ❌ | ❌ | ✅ | 2 |
 | `deploy.production` | irreversible | ❌ | 🔒 | ❌ | ❌ | 6 |
-| `knowledge.search` | read | ✅ project scope | ✅ project scope | ✅ | ✅ | 3 |
-| `knowledge.propose_fact` | internal_write (unverified) | ✅ | ✅ | ✅ | ✅ | 3 |
-| `knowledge.approve_fact` | — | ❌ | ❌ | ❌ | ❌ | humans only |
+| `knowledge.search` (company + current project, audience, no rejected/archived) | read | ✅ | ✅ | ✅ | ✅ | 3 |
+| `knowledge.propose` (unverified, current project only) | internal_write | ✅ | ✅ | ✅ | ✅ | 3 |
+| knowledge approve / reject / archive / edit | — | ❌ | ❌ | ❌ | ❌ | humans only (API) |
 | `messaging.send_external` | irreversible | 🔒 | ❌ | ❌ | ❌ | 5 |
 
 ## Cross-cutting rules
