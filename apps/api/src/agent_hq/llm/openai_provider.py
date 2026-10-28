@@ -8,6 +8,7 @@ from pydantic import SecretStr, ValidationError
 
 from agent_hq.llm.base import (
     ChatMessage,
+    ModelConfigError,
     ModelRequest,
     ModelResponse,
     ProviderError,
@@ -41,6 +42,26 @@ def _message(m: ChatMessage) -> dict[str, Any]:
             for c in m.tool_calls
         ]
     return msg
+
+
+# 429 codes that no retry can fix: the account must be topped up or reconfigured.
+_PERMANENT_429 = frozenset({"insufficient_quota", "credit_balance_exhausted", "billing_not_active"})
+
+
+def classify_error(error: Exception) -> Exception:
+    """Map SDK errors to retryable (ProviderError) or permanent (ModelConfigError)."""
+    if isinstance(error, openai.RateLimitError):
+        code = str(getattr(error, "code", "") or "")
+        if code in _PERMANENT_429 or "credit" in str(error).lower():
+            return ModelConfigError(f"OpenAI account cannot serve requests ({code or 'quota'})")
+        return ProviderError("openai rate limited")
+    if isinstance(error, (openai.APIConnectionError, openai.InternalServerError)):
+        return ProviderError(f"openai transient error: {type(error).__name__}")
+    if isinstance(error, (openai.AuthenticationError, openai.PermissionDeniedError)):
+        return ModelConfigError("OpenAI rejected the API key or its permissions")
+    if isinstance(error, (openai.NotFoundError, openai.BadRequestError)):
+        return ModelConfigError(f"OpenAI rejected the request: {type(error).__name__}")
+    return ProviderError(f"openai error: {type(error).__name__}")
 
 
 class OpenAIProvider:
@@ -79,8 +100,8 @@ class OpenAIProvider:
             }
         try:
             completion = await self._client.chat.completions.create(**kwargs)
-        except (openai.APIConnectionError, openai.RateLimitError, openai.InternalServerError) as e:
-            raise ProviderError(f"openai transient error: {type(e).__name__}") from e
+        except openai.OpenAIError as e:
+            raise classify_error(e) from e
 
         choice = completion.choices[0].message
         tool_calls = []
