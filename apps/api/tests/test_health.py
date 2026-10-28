@@ -2,7 +2,7 @@ import os
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import PostgresDsn
+from pydantic import PostgresDsn, SecretStr
 
 from agent_hq.config import Settings
 from agent_hq.main import create_app
@@ -36,6 +36,17 @@ def test_ready_returns_ok_with_database() -> None:
     assert response.json()["checks"] == {"database": "ok"}
 
 
+def test_request_id_header_is_set_and_validated() -> None:
+    with TestClient(create_app(Settings(environment="test"))) as client:
+        generated = client.get("/health/live").headers["X-Request-ID"]
+        echoed = client.get("/health/live", headers={"X-Request-ID": "abc12345-req"})
+        injected = client.get("/health/live", headers={"X-Request-ID": "bad\nvalue"})
+    assert len(generated) == 32
+    assert echoed.headers["X-Request-ID"] == "abc12345-req"
+    assert injected.headers["X-Request-ID"] != "bad\nvalue"
+
+
 def test_docs_disabled_in_production() -> None:
-    with TestClient(create_app(Settings(environment="production"))) as client:
+    settings = Settings(environment="production", session_secret=SecretStr("p" * 40))
+    with TestClient(create_app(settings)) as client:
         assert client.get("/docs").status_code == 404

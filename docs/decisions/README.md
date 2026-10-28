@@ -14,3 +14,4 @@ Format: Context → Decision → Consequences. Status is `Accepted`, `Proposed` 
 | [0007](0007-admin-authentication.md) | Admin authentication: password + server-side sessions | Accepted |
 | [0008](0008-github-read-only-access.md) | Read-only GitHub access for Sprint 1 | Accepted |
 | [0009](0009-execution-sandboxing.md) | Code/shell execution sandboxing | Proposed (Sprint 2) |
+| [0010](0010-sprint-1-refinements.md) | No token budget, checkpointer setup, initial models | Accepted |

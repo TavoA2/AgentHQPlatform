@@ -19,10 +19,10 @@ Legend: ✅ allowed · 🔒 allowed only with a matching human approval (ADR-000
 
 | Tool | Class | CIO | DevOps | SW Eng (S2) | QA (S2) | Sprint |
 |---|---|---|---|---|---|---|
-| `tasks.create_subtask` | internal_write | ✅ | ❌ | ❌ | ❌ | 1 |
-| `tasks.assign_agent` | internal_write | ✅ | ❌ | ❌ | ❌ | 1 |
-| `tasks.record_result` | internal_write | ✅ | ✅ own task | ✅ own task | ✅ own task | 1 |
-| `approvals.request` | internal_write | ✅ | ✅ | ✅ | ✅ | 1 |
+| `tasks.create_subtask` | internal_write | ✅ | ❌ | ❌ | ❌ | 2 |
+| `tasks.assign_agent` | internal_write | ✅ | ❌ | ❌ | ❌ | 2 |
+| `tasks.record_result` | internal_write | ✅ | ✅ own task | ✅ own task | ✅ own task | 2 |
+| `approvals.request` | internal_write | ✅ | ✅ | ✅ | ✅ | 2 |
 | `approvals.decide` | — | ❌ | ❌ | ❌ | ❌ | never (humans only) |
 | `github.list_tree` | read | ❌ | ✅ allowlisted repo | ✅ | ✅ | 1 |
 | `github.read_file` | read | ❌ | ✅ allowlisted repo + path filter | ✅ | ✅ | 1 |
@@ -46,6 +46,7 @@ Legend: ✅ allowed · 🔒 allowed only with a matching human approval (ADR-000
    and permitted for the project.
 3. **Self-approval:** no agent can decide, consume or forge an approval.
 4. **Limits per tool:** timeout, max response bytes, max calls per execution.
-5. **Budgets:** per-task token/cost budget and max graph steps; exceeding them fails the
-   task with reason `budget_exceeded`.
+5. **Loop guards (ADR-0010):** max model calls per specialist run and max graph steps;
+   exceeding them fails the task with reason `max_steps_exceeded`. There is no token
+   budget.
 6. **Audit:** every denied call and every 🔒 call writes an `AuditEvent`.

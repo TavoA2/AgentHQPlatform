@@ -3,10 +3,14 @@
 import json
 import logging
 import re
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
 REDACTED = "[REDACTED]"
+
+# Set per HTTP request by the API middleware; included in every log line of that request.
+request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 _SENSITIVE_KEY = re.compile(
     r"(pass(word)?|secret|token|api[_-]?key|authorization|cookie|credential|private[_-]?key)",
@@ -27,6 +31,11 @@ _SECRET_PATTERNS = [
 ]
 
 _STANDARD_ATTRS = set(vars(logging.makeLogRecord({}))) | {"message", "asctime"}
+
+
+def contains_credential(text: str) -> bool:
+    """High-confidence credential shapes only (no key=value heuristics)."""
+    return any(p.search(text) for p in _SECRET_PATTERNS if p.groups < 3)
 
 
 def redact_text(text: str) -> str:
@@ -58,6 +67,9 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "msg": record.getMessage(),
         }
+        request_id = request_id_var.get()
+        if request_id:
+            payload["request_id"] = request_id
         for key, value in vars(record).items():
             if key not in _STANDARD_ATTRS and not key.startswith("_"):
                 payload[key] = value

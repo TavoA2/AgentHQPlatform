@@ -1,7 +1,12 @@
-"""Database engine. Models and migrations arrive in Sprint 1."""
+"""Database engine and session factory."""
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from agent_hq.config import Settings
 
@@ -14,6 +19,10 @@ def create_engine(settings: Settings) -> AsyncEngine:
         pool_pre_ping=True,
         connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
     )
+
+
+def create_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def check_database(engine: AsyncEngine) -> None:

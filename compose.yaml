@@ -1,6 +1,13 @@
 # Local development stack. All ports bind to 127.0.0.1 only.
-# The `worker` service is added in Sprint 1 together with the job queue.
 name: agent-hq
+
+x-backend: &backend
+  build: ./apps/api
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    AGENT_HQ_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-agent_hq}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-agent_hq}
 
 services:
   db:
@@ -19,26 +26,40 @@ services:
       timeout: 3s
       retries: 10
 
+  # Applies Alembic migrations once, before the API and worker start.
+  migrate:
+    <<: *backend
+    command: ["agent-hq", "migrate"]
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
-    build: ./apps/api
+    <<: *backend
     command: ["agent-hq", "serve", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      AGENT_HQ_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-agent_hq}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-agent_hq}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./apps/api/src:/app/src:ro
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
       interval: 10s
       timeout: 3s
       retries: 5
+
+  # Runs the agents (LangGraph workflows). No ports, no Docker socket.
+  worker:
+    <<: *backend
+    command: ["agent-hq", "worker"]
+    volumes:
+      - ./apps/api/src:/app/src:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
   web:
     build:

@@ -105,6 +105,7 @@ stateDiagram-v2
     PLANNED --> CANCELLED
     QUEUED --> RUNNING
     QUEUED --> CANCELLED
+    QUEUED --> FAILED: worker could not start
     RUNNING --> WAITING_APPROVAL
     RUNNING --> IN_REVIEW
     RUNNING --> FAILED

@@ -6,10 +6,16 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
-    "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "sqlalchemy[asyncio]>=2.0.36",
     "psycopg[binary]>=3.2",
+    "alembic>=1.14",
+    "langgraph>=0.2",
+    "langgraph-checkpoint-postgres>=2.0",
+    "psycopg-pool>=3.2",
+    "argon2-cffi>=23.1",
+    "openai>=1.50",
+    "httpx>=0.27",
 ]
 
 [project.scripts]
@@ -18,7 +24,6 @@ agent-hq = "agent_hq.cli:main"
 [dependency-groups]
 dev = [
     "pytest>=8.3",
-    "httpx>=0.27",
     "ruff>=0.8",
     "mypy>=1.13",
 ]
@@ -38,7 +43,7 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "S105", "S106"]
 
 [tool.mypy]
 strict = true

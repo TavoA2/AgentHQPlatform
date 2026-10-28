@@ -32,9 +32,9 @@ of every sprint that adds a tool, integration or agent.
 | T4 | Secret exfiltration via logs, agent responses or prompts | Secrets never enter prompts or the DB. Log redaction filter (key names + token patterns). Output scanner flags token-like strings before persisting agent output. |
 | T5 | Approval replay or widening | SHA-256 action hash, single-use consumption, expiry, audit (ADR-0006). |
 | T6 | Session hijacking / CSRF | HttpOnly+SameSite cookies, CSRF token, Origin check, server-side session revocation, login rate limit (ADR-0007). |
-| T7 | Runaway cost / denial of wallet | Per-task token budget, daily budget, max graph steps, per-agent concurrency, tool timeouts. |
+| T7 | Runaway cost / denial of wallet | No in-app token budget (owner decision, ADR-0010). Loop guards: max model calls per specialist run, graph recursion limit, per-tool call limits and timeouts, worker concurrency. Usage and estimated cost recorded per execution. Monthly spend limit set in the provider dashboard. |
 | T8 | Arbitrary code / shell execution on host | No shell tools in Sprint 1. Sprint 2+: isolated sandbox runner only (ADR-0009). Worker has no Docker socket. |
-| T9 | Audit log tampering | Append-only table (no UPDATE/DELETE grants for the app role), hash chain `prev_hash → hash`, periodic verification job. |
+| T9 | Audit log tampering | Append-only enforced by database triggers on `audit_events` and `task_events` (UPDATE/DELETE raise), hash chain `prev_hash → hash`, `agent-hq verify-audit`. A separate non-owner DB role is planned for cloud deployment. |
 | T10 | Malicious or oversized tool responses (DoS, parser bugs) | Size caps, timeouts, strict Pydantic validation of tool outputs, path allowlists for repository reads. |
 | T11 | Supply-chain compromise of dependencies or CI | Lockfiles, `--locked` installs, Dependabot, SHA-pinned actions before secrets reach CI, least-privilege `GITHUB_TOKEN` permissions. |
 | T12 | False success reports | Task cannot reach `COMPLETED` without a recorded verification result and evidence references; QA/verification is a separate step from execution. |

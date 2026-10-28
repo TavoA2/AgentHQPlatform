@@ -6,7 +6,7 @@ Read [docs/product-brief.md](docs/product-brief.md) first. Architecture lives in
 ## Working rules
 
 - Work sprint by sprint. Do not start the next sprint without explicit approval from the
-  owner. Current sprint: **Sprint 0 complete; Sprint 1 pending approval.**
+  owner. Current sprint: **Sprint 1 complete (pending owner review); Sprint 2 not approved.**
 - A change that contradicts an ADR needs a new ADR that supersedes it, not a silent
   deviation.
 - Security is enforced in code (policy engine, approvals, project scoping), never only in
@@ -23,6 +23,11 @@ Read [docs/product-brief.md](docs/product-brief.md) first. Architecture lives in
 Backend (`apps/api`): `uv run ruff format . && uv run ruff check . && uv run mypy && uv run pytest`
 Web (`apps/web`): `npm run lint && npm run typecheck && npm run build`
 Stack: `docker compose up --build`
+
+On this Windows/OneDrive machine: run uv with
+`UV_PROJECT_ENVIRONMENT=$LOCALAPPDATA/agent-hq/api-venv UV_LINK_MODE=copy` (OneDrive locks
+`.venv`), use `127.0.0.1` rather than `localhost` for Postgres, and set
+`AGENT_HQ_DATABASE_URL` to run the DB-backed tests. See `docs/development.md`.
 
 ## Web app
 

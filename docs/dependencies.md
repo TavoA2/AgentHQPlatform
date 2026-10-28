@@ -3,7 +3,8 @@
 Source of truth is the lockfiles (`apps/api/uv.lock`, `apps/web/package-lock.json`).
 This table records the direct dependencies as resolved and verified together.
 
-Last verified: 2026-10-28 (Sprint 0) — lint, typecheck, tests and Docker builds passing.
+Last verified: 2026-10-28 (Sprint 1) — lint, typecheck, 129 backend tests against
+PostgreSQL 17, web build and the full Docker Compose stack passing.
 
 ## Runtime / infrastructure
 
@@ -16,21 +17,20 @@ Last verified: 2026-10-28 (Sprint 0) — lint, typecheck, tests and Docker build
 
 ## Backend (`apps/api`)
 
-| Package | Version |
-|---|---|
-| fastapi | 0.162.0 |
-| uvicorn[standard] | 0.54.0 |
-| pydantic | 2.14.1 |
-| pydantic-settings | 2.16.2 |
-| sqlalchemy[asyncio] | 2.1.6 |
-| psycopg[binary] | 3.3.6 |
-| pytest (dev) | 9.2.0 |
-| httpx (dev) | 0.28.1 |
-| ruff (dev) | 0.17.3 |
-| mypy (dev) | 2.4.0 |
-
-Added in Sprint 1 (to be recorded here when resolved): alembic, langgraph,
-langgraph-checkpoint-postgres, argon2-cffi, openai, opentelemetry packages.
+| Package | Version | Purpose |
+|---|---|---|
+| fastapi | 0.162.0 | HTTP API |
+| uvicorn[standard] | 0.54.0 | ASGI server |
+| pydantic / pydantic-settings | 2.14.1 / 2.16.2 | Contracts, configuration |
+| sqlalchemy[asyncio] | 2.1.6 | ORM |
+| alembic | 1.20.1 | Migrations |
+| psycopg[binary] / psycopg-pool | 3.3.6 / 3.3.3 | PostgreSQL driver, pool for the checkpointer |
+| langgraph | 1.2.18 | CIO workflow graph, interrupts |
+| langgraph-checkpoint-postgres | 3.2.0 | Durable checkpoints |
+| openai | 3.40.0 | OpenAI adapter (Chat Completions) |
+| argon2-cffi | 25.1.0 | Password hashing |
+| httpx | 0.28.1 | GitHub client, test client |
+| pytest / ruff / mypy (dev) | 9.2.0 / 0.17.3 / 2.4.0 | Quality gates |
 
 ## Web (`apps/web`)
 
