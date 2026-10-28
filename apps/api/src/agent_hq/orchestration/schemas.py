@@ -4,9 +4,17 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+Workflow = Literal["cicd_review", "code_change"]
+StepKind = Literal["cicd_review", "implement", "test_plan", "run_tests"]
+
 
 class Requirements(BaseModel):
     summary: str = Field(description="One-paragraph restatement of what is being asked")
+    workflow: Workflow = Field(
+        default="cicd_review",
+        description="cicd_review: analyze CI/CD and recommend; code_change: implement a "
+        "change with tests",
+    )
     repository: str | None = Field(
         default=None, description="owner/name of the repository to analyze, if stated"
     )
@@ -57,6 +65,49 @@ class CicdRecommendation(CicdAnalysis):
 class VerificationResult(BaseModel):
     passed: bool
     problems: list[str] = Field(default_factory=list)
+
+
+class ChangedFile(BaseModel):
+    path: str = Field(description="Repository-relative path")
+    action: Literal["create", "modify"]
+    content: str = Field(description="Complete new content of the file")
+
+
+class Changeset(BaseModel):
+    """What the Software Engineer proposes. Never applied to the repository by Agent HQ."""
+
+    summary: str
+    rationale: str
+    files: list[ChangedFile] = Field(description="Production code changes")
+    tests: list[ChangedFile] = Field(description="Test files covering the change")
+    risks: list[str] = Field(default_factory=list)
+
+
+class TestCase(BaseModel):
+    name: str
+    description: str
+    expected: str
+
+
+class TestPlan(BaseModel):
+    cases: list[TestCase]
+    notes: str = ""
+
+
+class QaReport(BaseModel):
+    verdict: Literal["ready", "not_ready"]
+    summary: str
+    failures: list[str] = Field(default_factory=list)
+    criteria_covered: list[str] = Field(default_factory=list)
+
+
+class PlanStep(BaseModel):
+    id: str
+    agent_key: str
+    kind: StepKind
+    depends_on: list[str] = Field(default_factory=list)
+    objective: str
+    feedback: str | None = None
 
 
 class OutcomeSummary(BaseModel):

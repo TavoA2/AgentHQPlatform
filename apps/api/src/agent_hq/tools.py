@@ -15,23 +15,29 @@ from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
 from agent_hq.domain import DomainError
 from agent_hq.events import record_audit, record_task_event
-from agent_hq.integrations.github import GitHubError, is_ci_relevant
+from agent_hq.integrations.github import GitHubError, is_ci_relevant, is_secret_path
 from agent_hq.llm.base import ToolSchema
 from agent_hq.runtime import Runtime
+from agent_hq.sandbox.client import SandboxError
+from agent_hq.sandbox.contracts import RunRequest, RunResult
 from agent_hq.security import approvals
 from agent_hq.security.policy import PolicyDenied, authorize_repository, authorize_tool
 
 logger = logging.getLogger(__name__)
 
+MAX_SOURCE_LISTING = 300
+MAX_TEST_REPO_FILES = 30
+
 
 class SideEffect(StrEnum):
     READ = "read"
+    ISOLATED_EXECUTION = "isolated_execution"
     INTERNAL_WRITE = "internal_write"
     EXTERNAL_WRITE = "external_write"
     IRREVERSIBLE = "irreversible"
@@ -46,6 +52,11 @@ class ToolContext:
     agent_key: str
     allowed_repos: frozenset[str]
     call_counts: Counter[str] = field(default_factory=Counter)
+    # Files proposed by another agent (e.g. a changeset) layered over repository files
+    # when building a sandbox workspace. Set by code, never by the model.
+    workspace_overlay: dict[str, str] = field(default_factory=dict)
+    # Raw sandbox results observed by code, used to validate what the model reports.
+    sandbox_results: list[RunResult] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -95,11 +106,20 @@ class RepoArgs(BaseModel):
 
 
 class ReadFileArgs(RepoArgs):
-    path: str = Field(max_length=400, description="Path of a CI/CD-relevant file in the repo")
+    path: str = Field(max_length=400, description="Path of a file in the repository")
 
 
 class WorkflowRunsArgs(RepoArgs):
     limit: int = Field(default=10, ge=1, le=20)
+
+
+class RunTestsArgs(RepoArgs):
+    template: Literal["python-pytest"] = "python-pytest"
+    repo_paths: list[str] = Field(
+        default_factory=list,
+        max_length=MAX_TEST_REPO_FILES,
+        description="Existing repository files to include next to the proposed changes",
+    )
 
 
 class PublishReportArgs(BaseModel):
@@ -109,27 +129,39 @@ class PublishReportArgs(BaseModel):
     report_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class ProposeChangesetArgs(BaseModel):
+    target: str = Field(max_length=300)
+    task_id: str
+    run_number: int
+    changeset_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    qa_report_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 # --- handlers ---
 def _repo(ctx: ToolContext, args: RepoArgs) -> str:
     return authorize_repository(args.repository, ctx.allowed_repos)
+
+
+def _check_source_path(path: str) -> None:
+    if path.startswith("/") or ".." in path.split("/") or is_secret_path(path):
+        raise PolicyDenied(f"path {path!r} is outside the source read scope")
 
 
 async def _list_tree(ctx: ToolContext, args: RepoArgs) -> dict[str, Any]:
     repo = _repo(ctx, args)
     entries = await ctx.runtime.github.list_tree(repo)
     relevant = [e for e in entries if is_ci_relevant(e.path)]
+    source = [e.path for e in entries if not is_secret_path(e.path)]
     return {
         "repository": repo,
         "total_files": len(entries),
         "ci_relevant": [{"path": e.path, "sha": e.sha, "size": e.size} for e in relevant[:50]],
+        "source_files": source[:MAX_SOURCE_LISTING],
     }
 
 
-async def _read_file(ctx: ToolContext, args: ReadFileArgs) -> dict[str, Any]:
-    repo = _repo(ctx, args)
-    if not is_ci_relevant(args.path):
-        raise PolicyDenied(f"path {args.path!r} is outside the CI/CD read scope")
-    f = await ctx.runtime.github.read_file(repo, args.path)
+async def _read(ctx: ToolContext, repo: str, path: str) -> dict[str, Any]:
+    f = await ctx.runtime.github.read_file(repo, path)
     return {
         "repository": repo,
         "path": f.path,
@@ -140,12 +172,42 @@ async def _read_file(ctx: ToolContext, args: ReadFileArgs) -> dict[str, Any]:
     }
 
 
+async def _read_file(ctx: ToolContext, args: ReadFileArgs) -> dict[str, Any]:
+    repo = _repo(ctx, args)
+    if not is_ci_relevant(args.path):
+        raise PolicyDenied(f"path {args.path!r} is outside the CI/CD read scope")
+    return await _read(ctx, repo, args.path)
+
+
+async def _read_source(ctx: ToolContext, args: ReadFileArgs) -> dict[str, Any]:
+    repo = _repo(ctx, args)
+    _check_source_path(args.path)
+    return await _read(ctx, repo, args.path)
+
+
 async def _list_workflow_runs(ctx: ToolContext, args: WorkflowRunsArgs) -> dict[str, Any]:
     repo = _repo(ctx, args)
     return {
         "repository": repo,
         "runs": await ctx.runtime.github.list_workflow_runs(repo, args.limit),
     }
+
+
+async def _run_tests(ctx: ToolContext, args: RunTestsArgs) -> dict[str, Any]:
+    repo = _repo(ctx, args)
+    files: dict[str, str] = {}
+    for path in args.repo_paths:
+        _check_source_path(path)
+        files[path] = (await ctx.runtime.github.read_file(repo, path)).content
+    files.update(ctx.workspace_overlay)  # proposed changes win over repository versions
+    request = RunRequest(
+        template=args.template,
+        files=files,
+        timeout_seconds=ctx.runtime.settings.sandbox_timeout_seconds,
+    )
+    result = await ctx.runtime.sandbox.run(request)
+    ctx.sandbox_results.append(result)
+    return {"workspace_files": sorted(files), **result.model_dump()}
 
 
 async def _publish_report(ctx: ToolContext, args: PublishReportArgs) -> dict[str, Any]:
@@ -161,12 +223,25 @@ async def _publish_report(ctx: ToolContext, args: PublishReportArgs) -> dict[str
     return result
 
 
+async def _propose_changeset(ctx: ToolContext, args: ProposeChangesetArgs) -> dict[str, Any]:
+    async with ctx.runtime.sessionmaker() as session:
+        result = await ctx.runtime.publisher.propose_changeset(
+            session,
+            target=args.target,
+            project_id=ctx.project_id,
+            task_id=ctx.task_id,
+            changeset_sha256=args.changeset_sha256,
+        )
+        await session.commit()
+    return result
+
+
 TOOLS: dict[str, ToolSpec] = {
     spec.name: spec
     for spec in (
         ToolSpec(
             "github.list_tree",
-            "List CI/CD-relevant files of an authorized repository (default branch).",
+            "List files of an authorized repository (default branch).",
             RepoArgs,
             SideEffect.READ,
             True,
@@ -185,6 +260,16 @@ TOOLS: dict[str, ToolSpec] = {
             _read_file,
         ),
         ToolSpec(
+            "github.read_source",
+            "Read one source file of an authorized repository (secrets are never readable).",
+            ReadFileArgs,
+            SideEffect.READ,
+            True,
+            30,
+            30,
+            _read_source,
+        ),
+        ToolSpec(
             "github.list_workflow_runs",
             "List recent GitHub Actions runs of an authorized repository.",
             WorkflowRunsArgs,
@@ -195,14 +280,36 @@ TOOLS: dict[str, ToolSpec] = {
             _list_workflow_runs,
         ),
         ToolSpec(
+            "sandbox.run_tests",
+            "Run the test suite in an isolated, offline sandbox on the proposed changes plus "
+            "the listed repository files. Returns exit code, counts and output tail.",
+            RunTestsArgs,
+            SideEffect.ISOLATED_EXECUTION,
+            True,
+            420,
+            3,
+            _run_tests,
+        ),
+        ToolSpec(
             "report.publish_external",
-            "Publish a verified report outside Agent HQ (mock adapter in Sprint 1).",
+            "Publish a verified report outside Agent HQ (mock adapter).",
             PublishReportArgs,
             SideEffect.EXTERNAL_WRITE,
             False,
             30,
             1,
             _publish_report,
+            requires_approval=True,
+        ),
+        ToolSpec(
+            "changeset.propose",
+            "Propose a verified changeset as a pull request (mock adapter until Sprint 5).",
+            ProposeChangesetArgs,
+            SideEffect.EXTERNAL_WRITE,
+            False,
+            30,
+            1,
+            _propose_changeset,
             requires_approval=True,
         ),
     )
@@ -215,7 +322,7 @@ def tool_schemas(names: list[str]) -> list[ToolSchema]:
 
 def approval_action(name: str, args: BaseModel) -> ApprovalRequiredAction:
     """Map a sensitive tool call to the action a human must approve."""
-    if isinstance(args, PublishReportArgs):
+    if isinstance(args, PublishReportArgs | ProposeChangesetArgs):
         return ApprovalRequiredAction(
             action_type=name,
             target=args.target,
@@ -298,7 +405,7 @@ async def _execute(ctx: ToolContext, name: str, raw_args: dict[str, Any]) -> Too
         return ToolOutcome(ok=False, error=str(exc), denied=True)
     except TimeoutError:
         return ToolOutcome(ok=False, error="tool timed out")
-    except GitHubError as exc:
-        return ToolOutcome(ok=False, error=str(exc))
+    except (GitHubError, SandboxError, ValueError) as exc:
+        return ToolOutcome(ok=False, error=str(exc)[:500])
     except DomainError as exc:
         return ToolOutcome(ok=False, error=str(exc))

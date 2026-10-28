@@ -86,7 +86,11 @@ async def test_full_workflow_with_approval(harness: Harness) -> None:
     assert executions["devops"]["cost_usd"] is not None
 
     events = (await harness.client.get(f"/tasks/{task_id}/events")).json()
-    statuses = [e["payload"]["to"] for e in events if e["type"] == "status_changed"]
+    statuses = [
+        e["payload"]["to"]
+        for e in events
+        if e["type"] == "status_changed" and e["task_id"] == task_id
+    ]
     assert statuses == [
         "QUEUED", "RUNNING", "WAITING_APPROVAL", "RUNNING", "IN_REVIEW", "COMPLETED"
     ]  # fmt: skip

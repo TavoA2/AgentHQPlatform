@@ -33,6 +33,7 @@ from agent_hq.orchestration.cio import (
 )
 from agent_hq.orchestration.mock_model import default_mock_responder
 from agent_hq.runtime import Runtime
+from agent_hq.sandbox.client import SandboxClient
 from agent_hq.security.approvals import expire_due
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ def build_runtime(settings: Settings, sessionmaker: Any) -> Runtime:
         models=ModelRouter(settings, mock_default=default_mock_responder),
         github=GitHubClient(settings.github_token, base_url=settings.github_api_url),
         publisher=MockReportPublisher(),
+        sandbox=SandboxClient(settings.sandbox_url, settings.sandbox_token),
     )
 
 

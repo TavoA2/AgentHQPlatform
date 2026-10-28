@@ -6,7 +6,7 @@ Read [docs/product-brief.md](docs/product-brief.md) first. Architecture lives in
 ## Working rules
 
 - Work sprint by sprint. Do not start the next sprint without explicit approval from the
-  owner. Current sprint: **Sprint 1 complete (pending owner review); Sprint 2 not approved.**
+  owner. Current sprint: **Sprint 2 complete (pending owner review); Sprint 3 not approved.**
 - A change that contradicts an ADR needs a new ADR that supersedes it, not a silent
   deviation.
 - Security is enforced in code (policy engine, approvals, project scoping), never only in

@@ -113,7 +113,38 @@ export type Recommendation = {
   risk: string;
 };
 
+export type ChangedFile = { path: string; action: "create" | "modify"; content: string };
+
+export type Changeset = {
+  summary: string;
+  rationale: string;
+  files: ChangedFile[];
+  tests: ChangedFile[];
+  risks: string[];
+  repository: string;
+  files_read: string[];
+};
+
+export type SandboxRun = {
+  exit_code: number | null;
+  timed_out: boolean;
+  duration_ms: number;
+  output: string;
+  summary: { passed: number; failed: number; errors: number } | null;
+};
+
+export type QaResult = {
+  report: { verdict: "ready" | "not_ready"; summary: string; failures: string[] };
+  sandbox: SandboxRun | null;
+};
+
+export type TestPlan = { cases: { name: string; description: string; expected: string }[] };
+
 export type TaskResult = {
+  workflow?: "cicd_review" | "code_change";
+  changeset?: Changeset;
+  test_plan?: TestPlan;
+  qa?: QaResult;
   summary?: { outcome: string; risks: string[]; next_steps: string[] };
   recommendation?: {
     repository: string;
@@ -129,12 +160,13 @@ export type TaskResult = {
 export type Task = {
   id: string;
   project_id: string;
+  parent_task_id: string | null;
   title: string;
   request: string;
   status: TaskStatus;
   assigned_agent_key: string | null;
   acceptance_criteria: string[];
-  options: { model_override?: string };
+  options: { model_override?: string; step_id?: string; kind?: string; depends_on?: string[] };
   result: TaskResult | null;
   failure_reason: string | null;
   failure_detail: string | null;
@@ -144,7 +176,38 @@ export type Task = {
   completed_at: string | null;
 };
 
-export type TaskDetail = Task & { executions: Execution[]; approvals: Approval[] };
+export type TaskDetail = Task & {
+  executions: Execution[];
+  approvals: Approval[];
+  subtasks: Task[];
+};
+
+export type MetricsSummary = {
+  generated_at: string;
+  window_hours: number;
+  tasks_by_status: Record<string, number>;
+  subtasks_by_status: Record<string, number>;
+  jobs_by_status: Record<string, number>;
+  recent_failed_jobs: {
+    id: number;
+    task_id: string;
+    kind: string;
+    attempts: number;
+    last_error: string | null;
+    updated_at: string;
+  }[];
+  approvals_pending: number;
+  approval_median_seconds: number | null;
+  agents: {
+    key: string;
+    executions: number;
+    failed: number;
+    running: number;
+    tokens_in: number;
+    tokens_out: number;
+    cost_usd: string | null;
+  }[];
+};
 
 export type TaskEvent = {
   id: number;

@@ -31,7 +31,12 @@ flowchart LR
 
     subgraph External
         LLM[Model providers<br/>OpenAI, later Anthropic]
-        GH[GitHub API<br/>read-only in Sprint 1]
+        GH[GitHub API<br/>read-only]
+    end
+
+    subgraph Sandbox["sandbox (only Docker socket holder)"]
+        SBX[Sandbox runner<br/>allowlisted templates]
+        CT[[Throwaway containers<br/>offline, non-root, limits]]
     end
 
     UI -- HTTPS, session cookie --> BFF
@@ -46,6 +51,8 @@ flowchart LR
     WRK --> AUD
     RT -- via provider adapter --> LLM
     RT -- via integration adapter --> GH
+    RT -- token, internal network --> SBX
+    SBX --> CT
 ```
 
 The browser never talks to model providers or integrations, and never holds credentials

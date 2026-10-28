@@ -50,6 +50,16 @@ class Settings(BaseSettings):
     github_token: SecretStr | None = None
     github_api_url: str = "https://api.github.com"
 
+    # --- Sandbox runner (ADR-0011) ---
+    sandbox_url: str = "http://sandbox:8080"
+    sandbox_token: SecretStr = SecretStr("")
+    sandbox_python_image: str = "agent-hq-sandbox-python:local"
+    sandbox_timeout_seconds: int = 120
+    sandbox_max_concurrency: int = 2
+
+    # --- Multi-agent plans (ADR-0011) ---
+    max_parallel_steps: int = 2
+
     # --- Approvals (ADR-0006) ---
     approval_ttl_hours: int = 24
 

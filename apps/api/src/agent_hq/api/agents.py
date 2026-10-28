@@ -24,7 +24,7 @@ async def derive_agent_statuses(db: AsyncSession) -> list[AgentOut]:
         .order_by(TaskExecution.agent_id, TaskExecution.started_at.desc())
     )
     by_agent: dict[uuid.UUID, tuple[TaskExecution, TaskStatus]] = {
-        e.agent_id: (e, status) for e, status in latest.tuples()
+        e.agent_id: (e, status) for e, status in latest
     }
     out = []
     for agent in agents:

@@ -100,6 +100,9 @@ def settings(clean_db: str) -> Settings:
         model_pricing={"mock-reasoning": (2.0, 10.0)},
         github_token=SecretStr("test-token"),
         github_api_url="https://github.test",
+        sandbox_url="http://sandbox.test",
+        sandbox_token=SecretStr("t" * 40),
+        max_parallel_steps=2,
         job_lease_seconds=60,
         approval_ttl_hours=24,
     )
@@ -181,6 +184,37 @@ class FakeGitHub:
         return httpx.Response(404, json={"message": "Not Found"})
 
 
+@dataclass
+class FakeSandbox:
+    """Stands in for Docker behind the real runner app (auth + contract are exercised).
+
+    A test file "fails" when it contains `assert False`; otherwise each `def test_` passes.
+    """
+
+    runs: list[dict[str, str]] = field(default_factory=list)
+
+    async def execute(self, template: Any, files: dict[str, str], seconds: int) -> Any:
+        from agent_hq.sandbox.contracts import RunResult, TestSummary
+
+        self.runs.append(dict(files))
+        tests = [c for p, c in files.items() if p.rsplit("/", 1)[-1].startswith("test_")]
+        failed = sum(c.count("assert False") for c in tests)
+        passed = sum(c.count("def test_") for c in tests) - failed
+        output = f"{passed} passed" + (f", {failed} failed" if failed else "")
+        return RunResult(
+            exit_code=1 if failed else (0 if passed else 5),
+            timed_out=False,
+            duration_ms=10,
+            output=output,
+            summary=TestSummary(passed=passed, failed=failed),
+        )
+
+
+@pytest.fixture
+def fake_sandbox() -> FakeSandbox:
+    return FakeSandbox()
+
+
 @pytest.fixture
 def fake_github() -> FakeGitHub:
     return FakeGitHub()
@@ -197,6 +231,7 @@ class Harness:
     worker: Any
     runtime: Any
     github: FakeGitHub
+    sandbox: FakeSandbox
     csrf: str = ""
 
     def use_script(self, script: Callable[..., Any]) -> None:
@@ -243,7 +278,9 @@ class Harness:
 
 
 @pytest.fixture
-async def harness(settings: Settings, fake_github: FakeGitHub) -> AsyncIterator[Harness]:
+async def harness(
+    settings: Settings, fake_github: FakeGitHub, fake_sandbox: FakeSandbox
+) -> AsyncIterator[Harness]:
     from agent_hq.agents import seed_agents
     from agent_hq.integrations.github import GitHubClient
     from agent_hq.main import create_app, init_state
@@ -268,6 +305,14 @@ async def harness(settings: Settings, fake_github: FakeGitHub) -> AsyncIterator[
         base_url=settings.github_api_url,
         transport=httpx.MockTransport(fake_github.handler),
     )
+    from agent_hq.sandbox.client import SandboxClient
+    from agent_hq.sandbox.runner import create_sandbox_app
+
+    runtime.sandbox = SandboxClient(
+        settings.sandbox_url,
+        settings.sandbox_token,
+        transport=httpx.ASGITransport(app=create_sandbox_app(settings, fake_sandbox.execute)),
+    )
     transport = httpx.ASGITransport(app=app)
     async with (
         open_checkpointer(settings) as checkpointer,
@@ -280,8 +325,10 @@ async def harness(settings: Settings, fake_github: FakeGitHub) -> AsyncIterator[
             worker=Worker(runtime, checkpointer),
             runtime=runtime,
             github=fake_github,
+            sandbox=fake_sandbox,
         )
     await runtime.github.aclose()
+    await runtime.sandbox.aclose()
     await app.state.engine.dispose()
 
 

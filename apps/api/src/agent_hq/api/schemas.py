@@ -99,6 +99,7 @@ class TaskIn(BaseModel):
 class TaskOut(Out):
     id: uuid.UUID
     project_id: uuid.UUID
+    parent_task_id: uuid.UUID | None
     title: str
     request: str
     status: TaskStatus
@@ -157,6 +158,7 @@ class ApprovalOut(Out):
 class TaskDetailOut(TaskOut):
     executions: list[ExecutionOut]
     approvals: list[ApprovalOut]
+    subtasks: list[TaskOut]
 
 
 class EventOut(Out):

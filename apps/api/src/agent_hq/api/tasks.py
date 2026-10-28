@@ -56,10 +56,13 @@ async def list_tasks(
     project_id: uuid.UUID | None = None,
     status_: Annotated[list[TaskStatus] | None, Query(alias="status")] = None,
     agent: str | None = None,
+    include_subtasks: bool = False,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[TaskOut]:
     query = select(Task).order_by(Task.created_at.desc()).limit(limit).offset(offset)
+    if not include_subtasks:
+        query = query.where(Task.parent_task_id.is_(None))
     if project_id:
         query = query.where(Task.project_id == project_id)
     if status_:
@@ -109,9 +112,14 @@ async def create_task(body: TaskIn, principal: PrincipalDep, db: DbDep) -> TaskO
 async def get_task(task_id: uuid.UUID, _: PrincipalDep, db: DbDep) -> TaskDetailOut:
     task = await _get_task(db, task_id)
     keys = await _agent_keys(db)
+    subtasks = list(
+        await db.scalars(
+            select(Task).where(Task.parent_task_id == task.id).order_by(Task.created_at)
+        )
+    )
     executions = await db.scalars(
         select(TaskExecution)
-        .where(TaskExecution.task_id == task.id)
+        .where(TaskExecution.task_id.in_([task.id, *(s.id for s in subtasks)]))
         .order_by(TaskExecution.started_at)
     )
     approvals = await db.scalars(
@@ -123,6 +131,7 @@ async def get_task(task_id: uuid.UUID, _: PrincipalDep, db: DbDep) -> TaskDetail
         **_task_out(task, keys).model_dump(),
         executions=[execution_out(e, keys) for e in executions],
         approvals=[approval_out(a, keys) for a in approvals],
+        subtasks=[_task_out(s, keys) for s in subtasks],
     )
 
 
@@ -135,9 +144,13 @@ async def task_events(
     limit: Annotated[int, Query(ge=1, le=1000)] = 500,
 ) -> list[EventOut]:
     await _get_task(db, task_id)
+    children = select(Task.id).where(Task.parent_task_id == task_id)
     rows = await db.scalars(
         select(TaskEvent)
-        .where(TaskEvent.task_id == task_id, TaskEvent.id > after_id)
+        .where(
+            (TaskEvent.task_id == task_id) | TaskEvent.task_id.in_(children),
+            TaskEvent.id > after_id,
+        )
         .order_by(TaskEvent.id)
         .limit(limit)
     )
@@ -149,6 +162,8 @@ async def start_task(
     task_id: uuid.UUID, principal: PrincipalDep, db: DbDep, settings: SettingsDep
 ) -> TaskOut:
     task = await _get_task(db, task_id, lock=True)
+    if task.parent_task_id is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "subtasks are run by their parent task")
     if task.status not in STARTABLE:
         raise HTTPException(status.HTTP_409_CONFLICT, f"task cannot be started from {task.status}")
     task.run_number += 1
@@ -187,6 +202,19 @@ async def cancel_task(task_id: uuid.UUID, principal: PrincipalDep, db: DbDep) ->
         reason="cancelled_by_user",
     )
     await cancel_open_for_task(db, task.id)
+    subtasks = await db.scalars(
+        select(Task).where(Task.parent_task_id == task.id).with_for_update()
+    )
+    for subtask in subtasks:
+        if subtask.status in CANCELLABLE:
+            await transition(
+                db,
+                subtask,
+                TaskStatus.CANCELLED,
+                actor_type="user",
+                actor_id=str(principal.user.id),
+                reason="parent_cancelled",
+            )
     # A running graph notices the cancellation at its next step; queued work is dropped.
     await db.execute(
         update(Job)

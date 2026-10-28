@@ -17,21 +17,23 @@ Legend: ✅ allowed · 🔒 allowed only with a matching human approval (ADR-000
 
 ## Tools × agents
 
-| Tool | Class | CIO | DevOps | SW Eng (S2) | QA (S2) | Sprint |
+| Tool | Class | CIO | DevOps | SW Eng | QA | Sprint |
 |---|---|---|---|---|---|---|
 | `tasks.create_subtask` | internal_write | ✅ | ❌ | ❌ | ❌ | 2 |
 | `tasks.assign_agent` | internal_write | ✅ | ❌ | ❌ | ❌ | 2 |
 | `tasks.record_result` | internal_write | ✅ | ✅ own task | ✅ own task | ✅ own task | 2 |
 | `approvals.request` | internal_write | ✅ | ✅ | ✅ | ✅ | 2 |
 | `approvals.decide` | — | ❌ | ❌ | ❌ | ❌ | never (humans only) |
-| `github.list_tree` | read | ❌ | ✅ allowlisted repo | ✅ | ✅ | 1 |
-| `github.read_file` | read | ❌ | ✅ allowlisted repo + path filter | ✅ | ✅ | 1 |
-| `github.list_workflow_runs` | read | ❌ | ✅ allowlisted repo | ❌ | ✅ | 1 |
+| `github.list_tree` | read | ❌ | ✅ allowlisted repo | ✅ allowlisted repo | ✅ allowlisted repo | 1 |
+| `github.read_file` (CI/CD scope) | read | ❌ | ✅ allowlisted repo + CI path filter | ❌ | ❌ | 1 |
+| `github.read_source` (source scope, secrets excluded) | read | ❌ | ❌ | ✅ | ✅ | 2 |
+| `github.list_workflow_runs` | read | ❌ | ✅ allowlisted repo | ❌ | ❌ | 1 |
 | `report.publish_external` (mock adapter) | external_write | 🔒 | ❌ | ❌ | ❌ | 1 (sample approval) |
+| `changeset.propose` (mock PR) | external_write | 🔒 | ❌ | ❌ | ❌ | 2 |
 | `github.create_branch` / `push` | external_write | ❌ | 🔒 | 🔒 | ❌ | 5 |
 | `github.open_pull_request` | external_write | ❌ | 🔒 | 🔒 | ❌ | 5 |
 | `github.merge_protected` | irreversible | ❌ | ❌ | ❌ | ❌ | human only |
-| `sandbox.run_tests` | read (isolated) | ❌ | ✅ | ✅ | ✅ | 2 |
+| `sandbox.run_tests` | isolated_execution | ❌ | ❌ | ❌ | ✅ | 2 |
 | `deploy.production` | irreversible | ❌ | 🔒 | ❌ | ❌ | 6 |
 | `knowledge.search` | read | ✅ project scope | ✅ project scope | ✅ | ✅ | 3 |
 | `knowledge.propose_fact` | internal_write (unverified) | ✅ | ✅ | ✅ | ✅ | 3 |

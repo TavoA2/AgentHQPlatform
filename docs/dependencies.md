@@ -3,8 +3,9 @@
 Source of truth is the lockfiles (`apps/api/uv.lock`, `apps/web/package-lock.json`).
 This table records the direct dependencies as resolved and verified together.
 
-Last verified: 2026-10-28 (Sprint 1) — lint, typecheck, 129 backend tests against
-PostgreSQL 17, web build and the full Docker Compose stack passing.
+Last verified: 2026-10-28 (Sprint 2) — lint, typecheck, 160 backend tests against
+PostgreSQL 17 (including the real Docker sandbox test), web build and the full Docker
+Compose stack passing. Sandbox image: python:3.13-slim + pytest 9.2.0.
 
 ## Runtime / infrastructure
 
@@ -29,7 +30,8 @@ PostgreSQL 17, web build and the full Docker Compose stack passing.
 | langgraph-checkpoint-postgres | 3.2.0 | Durable checkpoints |
 | openai | 3.40.0 | OpenAI adapter (Chat Completions) |
 | argon2-cffi | 25.1.0 | Password hashing |
-| httpx | 0.28.1 | GitHub client, test client |
+| httpx | 0.28.1 | GitHub and sandbox clients, test client |
+| docker | 7.2.0 | Sandbox runner only (Docker Engine API) |
 | pytest / ruff / mypy (dev) | 9.2.0 / 0.17.3 / 2.4.0 | Quality gates |
 
 ## Web (`apps/web`)

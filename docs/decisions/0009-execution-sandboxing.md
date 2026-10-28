@@ -1,6 +1,6 @@
 # ADR-0009: Code/shell execution sandboxing
 
-Status: Proposed (decide in Sprint 2, before QA/Software Engineer agents run code)
+Status: Accepted in Sprint 2 — option 1 (ephemeral Docker via a sandbox runner). See ADR-0011.
 
 ## Context
 Software Engineer and QA agents will need to run tests and builds on untrusted code.

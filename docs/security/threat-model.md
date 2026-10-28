@@ -33,12 +33,13 @@ of every sprint that adds a tool, integration or agent.
 | T5 | Approval replay or widening | SHA-256 action hash, single-use consumption, expiry, audit (ADR-0006). |
 | T6 | Session hijacking / CSRF | HttpOnly+SameSite cookies, CSRF token, Origin check, server-side session revocation, login rate limit (ADR-0007). |
 | T7 | Runaway cost / denial of wallet | No in-app token budget (owner decision, ADR-0010). Loop guards: max model calls per specialist run, graph recursion limit, per-tool call limits and timeouts, worker concurrency. Usage and estimated cost recorded per execution. Monthly spend limit set in the provider dashboard. |
-| T8 | Arbitrary code / shell execution on host | No shell tools in Sprint 1. Sprint 2+: isolated sandbox runner only (ADR-0009). Worker has no Docker socket. |
+| T8 | Arbitrary code / shell execution on host | No shell tools. Tests run only through the sandbox runner (ADR-0011): allowlisted templates, throwaway container, no network, uid 65534, all capabilities dropped, no-new-privileges, CPU/memory/PID limits, timeout, output redacted. Only the sandbox service holds the Docker socket; it has no host port and requires a token. Worker has no Docker socket. |
 | T9 | Audit log tampering | Append-only enforced by database triggers on `audit_events` and `task_events` (UPDATE/DELETE raise), hash chain `prev_hash → hash`, `agent-hq verify-audit`. A separate non-owner DB role is planned for cloud deployment. |
 | T10 | Malicious or oversized tool responses (DoS, parser bugs) | Size caps, timeouts, strict Pydantic validation of tool outputs, path allowlists for repository reads. |
 | T11 | Supply-chain compromise of dependencies or CI | Lockfiles, `--locked` installs, Dependabot, SHA-pinned actions before secrets reach CI, least-privilege `GITHUB_TOKEN` permissions. |
 | T12 | False success reports | Task cannot reach `COMPLETED` without a recorded verification result and evidence references; QA/verification is a separate step from execution. |
 | T13 | Database exposed on the network | Postgres port bound to `127.0.0.1` locally; private subnet in cloud; separate DB role for the app without superuser. |
+| T14 | Docker socket abuse via the sandbox service (socket = host root) | Minimal API (one operation, fixed templates), bearer token, internal network only, input size/path validation. Planned: gVisor runtime and rootless Docker for cloud (Sprint 6). |
 
 ## Residual risks accepted for Sprint 1
 

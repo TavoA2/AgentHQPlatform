@@ -8,6 +8,7 @@ from agent_hq.config import Settings
 from agent_hq.integrations.github import GitHubClient
 from agent_hq.integrations.reports import ReportPublisher
 from agent_hq.llm.router import ModelRouter
+from agent_hq.sandbox.client import SandboxClient
 
 
 @dataclass
@@ -17,3 +18,4 @@ class Runtime:
     models: ModelRouter
     github: GitHubClient
     publisher: ReportPublisher
+    sandbox: SandboxClient

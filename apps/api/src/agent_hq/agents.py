@@ -29,8 +29,8 @@ CIO = AgentDefinition(
     department="executive",
     model_profile="reasoning",
     description="Coordinates requests, plans work, delegates, verifies and reports.",
-    allowed_tools=frozenset({"report.publish_external"}),
-    can_delegate_to=frozenset({"devops"}),
+    allowed_tools=frozenset({"report.publish_external", "changeset.propose"}),
+    can_delegate_to=frozenset({"devops", "software_engineer", "qa"}),
 )
 
 DEVOPS = AgentDefinition(
@@ -38,11 +38,29 @@ DEVOPS = AgentDefinition(
     display_name="DevOps Engineer",
     department="engineering",
     model_profile="reasoning",
-    description="Reviews CI/CD and infrastructure configuration (read-only in Sprint 1).",
+    description="Reviews CI/CD and infrastructure configuration (read-only).",
     allowed_tools=frozenset({"github.list_tree", "github.read_file", "github.list_workflow_runs"}),
 )
 
-REGISTRY: dict[str, AgentDefinition] = {a.key: a for a in (CIO, DEVOPS)}
+SOFTWARE_ENGINEER = AgentDefinition(
+    key="software_engineer",
+    display_name="Software Engineer",
+    department="engineering",
+    model_profile="reasoning",
+    description="Designs and writes code changes with tests; proposes them, never pushes.",
+    allowed_tools=frozenset({"github.list_tree", "github.read_source"}),
+)
+
+QA = AgentDefinition(
+    key="qa",
+    display_name="QA Engineer",
+    department="quality",
+    model_profile="reasoning",
+    description="Plans tests, runs them in the isolated sandbox and reports with evidence.",
+    allowed_tools=frozenset({"github.list_tree", "github.read_source", "sandbox.run_tests"}),
+)
+
+REGISTRY: dict[str, AgentDefinition] = {a.key: a for a in (CIO, DEVOPS, SOFTWARE_ENGINEER, QA)}
 
 
 def get_definition(key: str) -> AgentDefinition:

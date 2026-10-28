@@ -42,6 +42,31 @@ class GitHubError(RuntimeError):
         self.transient = transient
 
 
+SECRET_PATH_PATTERNS = (
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "id_rsa*",
+    "id_ed25519*",
+    "*credential*",
+    "*secret*",
+    ".npmrc",
+    ".pypirc",
+    ".netrc",
+)
+
+
+def is_secret_path(path: str) -> bool:
+    """Files that may hold credentials are never readable or writable by agents."""
+    parts = path.lower().split("/")
+    if ".git" in parts[:-1] or parts[-1] == ".git":
+        return True
+    return any(fnmatch.fnmatchcase(parts[-1], pattern) for pattern in SECRET_PATH_PATTERNS)
+
+
 def is_ci_relevant(path: str) -> bool:
     if path.startswith("/") or ".." in path.split("/"):
         return False

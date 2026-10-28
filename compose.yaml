@@ -59,6 +59,34 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      sandbox:
+        condition: service_started
+    restart: unless-stopped
+
+  # Builds the image used for sandboxed test runs, then exits.
+  sandbox-python-image:
+    build: ./apps/sandbox-images/python
+    image: agent-hq-sandbox-python:local
+    command: ["python", "--version"]
+    restart: "no"
+
+  # The only service with the Docker socket (ADR-0011). It publishes no host port, accepts
+  # only token-authenticated requests from the internal network and runs only allowlisted
+  # templates in throwaway, offline, non-root containers.
+  sandbox:
+    build: ./apps/api
+    command: ["agent-hq", "sandbox", "--host", "0.0.0.0", "--port", "8080"]
+    user: "0:0"  # required to use the Docker socket
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AGENT_HQ_SANDBOX_TOKEN: ${AGENT_HQ_SANDBOX_TOKEN:?set AGENT_HQ_SANDBOX_TOKEN in .env}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      sandbox-python-image:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   web:

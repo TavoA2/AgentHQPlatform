@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApprovalCard } from "@/components/approval-card";
+import { ChangesetView, PlanView, QaView } from "@/components/task-results";
 import { Button, Card, ErrorNote, TaskStatusBadge, formatTime } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { useLiveRefresh, useTaskEventFeed } from "@/lib/live-events";
@@ -24,7 +26,8 @@ export default function TaskPage() {
   const [live, setLive] = useState<TaskEvent[]>([]);
   const [error, setError] = useState<string>();
 
-  useLiveRefresh(task.reload, (e) => e.task_id === id);
+  const related = new Set([id, ...(task.data?.subtasks.map((s) => s.id) ?? [])]);
+  useLiveRefresh(task.reload, (e) => related.has(e.task_id));
   useTaskEventFeed(id, (event) => setLive((prev) => [...prev, event]));
 
   const lastHistoryId = history.data?.at(-1)?.id ?? 0;
@@ -49,15 +52,20 @@ export default function TaskPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
+          {t.parent_task_id && (
+            <Link href={`/tasks/${t.parent_task_id}`} className="text-sm text-cyan">
+              ← parent task
+            </Link>
+          )}
           <h1 className="text-xl font-semibold">{t.title}</h1>
           <p className="mt-1 max-w-3xl whitespace-pre-wrap text-sm text-muted">{t.request}</p>
         </div>
         <div className="flex items-center gap-3">
           <TaskStatusBadge status={t.status} />
-          {STARTABLE.includes(t.status) && (
+          {!t.parent_task_id && STARTABLE.includes(t.status) && (
             <Button onClick={() => act("start")}>{t.status === "FAILED" ? "Retry" : "Start"}</Button>
           )}
-          {CANCELLABLE.includes(t.status) && (
+          {!t.parent_task_id && CANCELLABLE.includes(t.status) && (
             <Button variant="danger" onClick={() => act("cancel")}>Cancel</Button>
           )}
         </div>
@@ -87,6 +95,10 @@ export default function TaskPage() {
           )}
         </Card>
       )}
+
+      <PlanView subtasks={t.subtasks} />
+      {t.result?.changeset && <ChangesetView changeset={t.result.changeset} />}
+      {t.result?.qa && <QaView qa={t.result.qa} plan={t.result.test_plan} />}
 
       {rec && (
         <Card title={`CI/CD review · ${rec.repository}`}>

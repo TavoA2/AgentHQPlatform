@@ -95,6 +95,22 @@ After the report passes verification, the CIO proposes
 It goes to the approval queue; on approval the **mock** adapter records the
 "publication". This exercises the full approval path without any real external effect.
 
+## Software Engineer and QA (Sprint 2)
+
+The CIO routes a request to the `code_change` workflow and builds a fixed plan
+(ADR-0011): `implement` (Software Engineer) and `test_plan` (QA) run in parallel, then
+`run_tests` (QA) depends on both. Each step is a subtask with code validation and one
+retry; a QA verdict of `not_ready` triggers one rework round with QA's feedback.
+
+- **Software Engineer** reads source files (`github.read_source`, secrets excluded) and
+  returns a `Changeset` (complete file contents + tests). Validation: paths, size, secret
+  paths, at least one test file, no credential strings. Nothing is pushed.
+- **QA** writes a `TestPlan`, then calls `sandbox.run_tests`; the workspace is the
+  changeset (injected by code) plus repository files QA lists. The sandbox result recorded
+  by code is the source of truth: a "ready" verdict with a failing run is rejected.
+- The outbound action is `changeset.propose` (mock pull request) behind a human approval
+  bound to the changeset and QA report hashes.
+
 ## Agent status for the UI
 
 Derived server-side from the agent's most recent execution, published as events:

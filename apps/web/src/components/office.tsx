@@ -10,6 +10,7 @@ import { AgentStatusBadge } from "@/components/ui";
 const DEPARTMENTS: { key: string; label: string; accent: string }[] = [
   { key: "executive", label: "Executive", accent: "from-violet/30" },
   { key: "engineering", label: "Engineering", accent: "from-cyan/25" },
+  { key: "quality", label: "Quality", accent: "from-orange/20" },
 ];
 
 const STATUS_HINT: Record<AgentStatus, string> = {
@@ -78,7 +79,7 @@ function Desk({ agent }: { agent: Agent }) {
 
 export function OfficeFloor({ agents }: { agents: Agent[] }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {DEPARTMENTS.map((dept) => {
         const members = agents.filter((a) => a.department === dept.key);
         return (

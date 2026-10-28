@@ -6,7 +6,7 @@ files the agent read. They are not a substitute for a real model's analysis.
 
 import json
 import re
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -135,18 +135,130 @@ def _analyze_files(files: list[dict[str, Any]]) -> CicdAnalysis:
     )
 
 
+_CODE_VERBS = re.compile(r"\b(implement|add|create|write|build|fix|refactor)\b", re.IGNORECASE)
+_CI_TERMS = re.compile(r"\b(ci/cd|ci|cd|pipeline|workflows?|github actions)\b", re.IGNORECASE)
+
+MOCK_MODULE = "agenthq_changes/text_tools.py"
+MOCK_TEST = "tests/test_text_tools.py"
+_MOCK_CODE = '''"""Proposed by the Agent HQ mock Software Engineer."""
+
+import re
+
+
+def slugify(text: str) -> str:
+    """Lowercase words joined by single hyphens."""
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return "-".join(words)
+'''
+_MOCK_TESTS = """import os
+import sys
+
+sys.path.insert(0, os.getcwd())
+
+from agenthq_changes.text_tools import slugify
+
+
+def test_slugify_basic():
+    assert slugify("Hello World") == "hello-world"
+
+
+def test_slugify_collapses_symbols():
+    assert slugify("  Agent -- HQ!! ") == "agent-hq"
+
+
+def test_slugify_empty():
+    assert slugify("") == ""
+"""
+
+
+def _classify(text: str) -> Literal["cicd_review", "code_change"]:
+    if _CODE_VERBS.search(text) and not _CI_TERMS.search(text):
+        return "code_change"
+    return "cicd_review"
+
+
+def _implement(request: ModelRequest) -> ModelResponse:
+    from agent_hq.orchestration.schemas import ChangedFile, Changeset
+
+    return _respond(
+        request,
+        Changeset(
+            summary="Add a slugify helper with tests",
+            rationale="Deterministic mock change; exercises the implement → test flow.",
+            files=[ChangedFile(path=MOCK_MODULE, action="create", content=_MOCK_CODE)],
+            tests=[ChangedFile(path=MOCK_TEST, action="create", content=_MOCK_TESTS)],
+            risks=["Produced by the deterministic mock provider."],
+        ),
+    )
+
+
+def _qa(request: ModelRequest) -> ModelResponse:
+    from agent_hq.orchestration.schemas import QaReport
+
+    results = _tool_results(request)
+    runs = [r for r in results if "exit_code" in r]
+    if not runs:
+        call = ToolCall("run-1", "sandbox.run_tests", {"repository": request.hints["repository"]})
+        return _respond(request, tool_calls=[call])
+    run = runs[-1]
+    summary = run.get("summary") or {}
+    passed = (
+        run.get("exit_code") == 0
+        and not run.get("timed_out")
+        and summary.get("failed", 0) == 0
+        and summary.get("passed", 0) > 0
+    )
+    failures = [] if passed else [f"sandbox exit code {run.get('exit_code')}: {summary}"]
+    return _respond(
+        request,
+        QaReport(
+            verdict="ready" if passed else "not_ready",
+            summary=f"Sandbox run: {summary or 'no summary'}",
+            failures=failures,
+        ),
+    )
+
+
 def default_mock_responder(request: ModelRequest) -> ModelResponse | None:
     if request.purpose == "cio.analyze":
         text = str(request.hints.get("request", ""))
-        match = _REPO_IN_TEXT.search(text)
+        allowed = {r.lower() for r in request.hints.get("allowed_repos", [])}
+        mentioned = _REPO_IN_TEXT.findall(text)
+        # Prefer an authorized repository; "CI/CD" also looks like owner/name.
+        repository = next((m for m in mentioned if m.lower() in allowed), None) or next(
+            iter(mentioned), None
+        )
+        workflow = _classify(text)
         return _respond(
             request,
             Requirements(
                 summary=text[:300],
-                repository=match.group(1) if match else None,
-                objectives=["Assess CI/CD security, reliability and maintainability"],
+                workflow=workflow,
+                repository=repository,
+                objectives=(
+                    ["Assess CI/CD security, reliability and maintainability"]
+                    if workflow == "cicd_review"
+                    else [text[:200]]
+                ),
             ),
         )
+    if request.purpose == "swe.implement":
+        return _implement(request)
+    if request.purpose == "qa.test_plan":
+        from agent_hq.orchestration.schemas import TestCase, TestPlan
+
+        criteria = list(request.hints.get("acceptance_criteria") or ["The change works"])
+        return _respond(
+            request,
+            TestPlan(
+                cases=[
+                    TestCase(name=f"case_{i + 1}", description=c, expected="passes")
+                    for i, c in enumerate(criteria)
+                ]
+            ),
+        )
+    if request.purpose == "qa.run_tests":
+        return _qa(request)
     if request.purpose == "devops.analyze":
         results = _tool_results(request)
         if not results:
@@ -160,17 +272,33 @@ def default_mock_responder(request: ModelRequest) -> ModelResponse | None:
         files = [r for r in results if "content" in r and "path" in r]
         return _respond(request, _analyze_files(files))
     if request.purpose == "cio.summary":
-        hints = request.hints
-        return _respond(
-            request,
-            OutcomeSummary(
-                outcome=(
-                    f"Reviewed {hints.get('files', 0)} CI/CD files in {hints.get('repository')}: "
-                    f"{hints.get('findings', 0)} findings, "
-                    f"{hints.get('recommendations', 0)} recommendations."
-                ),
-                risks=list(hints.get("top_risks", [])),
-                next_steps=list(hints.get("recommendation_titles", [])),
-            ),
-        )
+        return _respond(request, _summary(request.hints))
     return None
+
+
+def _summary(hints: dict[str, Any]) -> OutcomeSummary:
+    final = hints.get("final", {})
+    repo = hints.get("repository")
+    if "recommendation" in final:
+        rec = final["recommendation"]
+        return OutcomeSummary(
+            outcome=(
+                f"Reviewed {len(rec['files_inspected'])} CI/CD files in {repo}: "
+                f"{len(rec['findings'])} findings, {len(rec['recommendations'])} recommendations."
+            ),
+            risks=[
+                f["description"] for f in rec["findings"] if f["severity"] in ("high", "critical")
+            ][:5],
+            next_steps=[r["title"] for r in rec["recommendations"]][:5],
+        )
+    changeset = final.get("changeset", {})
+    qa = final.get("qa", {})
+    files = [f["path"] for f in [*changeset.get("files", []), *changeset.get("tests", [])]]
+    return OutcomeSummary(
+        outcome=(
+            f"Proposed a change to {repo} ({len(files)} files). "
+            f"QA verdict: {qa.get('report', {}).get('verdict')}."
+        ),
+        risks=list(changeset.get("risks", [])),
+        next_steps=["Review the proposed pull request", "Merge after human code review"],
+    )

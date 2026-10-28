@@ -25,6 +25,12 @@ def _run(coro: Coroutine[Any, Any, int]) -> int:
     return asyncio.run(coro)
 
 
+def sandbox_app() -> Any:
+    from agent_hq.sandbox.runner import create_sandbox_app
+
+    return create_sandbox_app(get_settings())
+
+
 def migrate() -> int:
     from alembic import command
     from alembic.config import Config
@@ -57,6 +63,7 @@ async def _worker() -> int:
             await Worker(runtime, checkpointer).run_forever(stop)
     finally:
         await runtime.github.aclose()
+        await runtime.sandbox.aclose()
         await engine.dispose()
     return 0
 
@@ -135,6 +142,9 @@ def main() -> None:
     admin.add_argument("--email", required=True)
     admin.add_argument("--name", default="Administrator")
     sub.add_parser("verify-audit", help="verify the audit log hash chain")
+    sandbox = sub.add_parser("sandbox", help="run the sandbox runner (needs Docker access)")
+    sandbox.add_argument("--host", default="127.0.0.1")
+    sandbox.add_argument("--port", type=int, default=8080)
 
     args = parser.parse_args()
     if args.command == "serve":
@@ -144,6 +154,16 @@ def main() -> None:
             host=args.host,
             port=args.port,
             reload=args.reload,
+            loop=LOOP,
+            log_config=None,
+        )
+        return
+    if args.command == "sandbox":
+        uvicorn.run(
+            "agent_hq.cli:sandbox_app",
+            factory=True,
+            host=args.host,
+            port=args.port,
             loop=LOOP,
             log_config=None,
         )

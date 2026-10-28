@@ -17,8 +17,10 @@ docker compose exec api agent-hq create-admin --email you@example.com
 ```
 
 Services: `db`, `migrate` (runs `alembic upgrade head` once), `api` (reloads on changes
-under `apps/api/src`), `worker` (agents) and `web` (production build; use option B for UI
-hot reload). After changing worker code: `docker compose restart worker`.
+under `apps/api/src`), `worker` (agents), `sandbox` (the only service with the Docker
+socket; runs tests in throwaway containers), `sandbox-python-image` (builds the test image
+and exits) and `web` (production build; use option B for UI hot reload). After changing
+worker code: `docker compose restart worker`.
 
 ## Option B — database in Docker, apps on the host
 
@@ -34,7 +36,10 @@ uv run agent-hq migrate
 uv run agent-hq create-admin --email you@example.com
 uv run agent-hq serve --reload
 uv run agent-hq worker
+uv run agent-hq sandbox          # needs Docker; set AGENT_HQ_SANDBOX_URL=http://127.0.0.1:8080 for the worker
 ```
+
+Build the sandbox test image once: `docker build -t agent-hq-sandbox-python:local apps/sandbox-images/python`.
 
 Web, from `apps/web`:
 
@@ -53,6 +58,7 @@ The web app proxies `/api/*` to `API_INTERNAL_URL` (default `http://localhost:80
 | `agent-hq create-admin --email …` | Create the admin, or reset its password (prompted, min 12 chars) |
 | `agent-hq worker` | Run the job worker (LangGraph agents) |
 | `agent-hq verify-audit` | Recompute the audit log hash chain |
+| `agent-hq sandbox` | Run the sandbox runner (needs Docker access) |
 
 ## Verification commands
 
@@ -70,6 +76,9 @@ PowerShell, with the Compose database running:
 $env:AGENT_HQ_DATABASE_URL = "postgresql+psycopg://agent_hq:<password>@127.0.0.1:5432/agent_hq"
 uv run pytest
 ```
+
+To also run the real-Docker sandbox test, build the sandbox image and set
+`AGENT_HQ_DOCKER_TESTS=1`.
 
 Web, from `apps/web`:
 
