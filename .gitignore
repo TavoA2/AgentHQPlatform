@@ -1,0 +1,25 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Next.js (apps/web has its own .gitignore too)
+node_modules/
+.next/
+*.tsbuildinfo
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/

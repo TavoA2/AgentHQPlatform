@@ -1,0 +1,58 @@
+# Local development stack. All ports bind to 127.0.0.1 only.
+# The `worker` service is added in Sprint 1 together with the job queue.
+name: agent-hq
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agent_hq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-agent_hq}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./apps/api
+    command: ["agent-hq", "serve", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AGENT_HQ_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-agent_hq}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-agent_hq}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./apps/api/src:/app/src:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        API_INTERNAL_URL: http://api:8000
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      NEXT_PUBLIC_BRAND_NAME: ${AGENT_HQ_BRAND_NAME:-Veltrix Labs}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:
