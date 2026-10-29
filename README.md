@@ -4,17 +4,14 @@ Internal AI virtual operations platform for **Veltrix Labs** (provisional brand)
 administrator supervises specialized AI agents that plan, execute and report real work,
 with human approval for sensitive actions.
 
-> Status: **Sprint 5 — integrations:** approved changes become real **draft pull requests**
-> (GitHub App), Slack/Telegram notifications, and a **public read-only demo**
-> ([guide](docs/guides/public-demo.md)). Built on the 3D office (Sprint 4) and The Brain (Sprint 3). Agents now share scoped, versioned company and project
-> knowledge with provenance; what they write stays unverified until you approve it.
-> The AI CIO, **Dixon** (LangGraph), routes each
-> request to a workflow and delegates it as subtasks: a DevOps agent reviews CI/CD, or a
-> Software Engineer and a QA agent work in parallel on a code change that QA tests in an
-> isolated Docker sandbox. Results are verified by code, a human approves the outbound
-> action, and everything is recorded. See the [roadmap](docs/product-brief.md#roadmap),
-> [Sprint 1](docs/sprints/sprint-1-acceptance.md) and
-> [Sprint 2](docs/sprints/sprint-2-acceptance.md) acceptance.
+> Status: **all six planned sprints delivered.** Dixon (the AI CIO, LangGraph) routes each
+> request to a workflow and delegates it as visible subtasks: a DevOps agent reviews CI/CD,
+> or a Software Engineer and a QA agent work in parallel on a change that QA tests in an
+> isolated Docker sandbox. Results are verified by code against evidence, a human approves
+> every outbound action (e.g. a draft pull request via a GitHub App), and everything is
+> audited. The Brain holds scoped, versioned knowledge; a 3D office shows live agent state;
+> a read-only public demo and a single-VM AWS deployment (HTTPS, 2FA, backups) are ready.
+> See the [roadmap](docs/product-brief.md#roadmap) and the acceptance evidence below.
 
 ## What runs
 
@@ -46,7 +43,10 @@ apps/
   web/          Next.js 16 (App Router) · TypeScript · Tailwind CSS v4
   sandbox-images/ images for sandboxed test runs (python: stdlib + pytest)
 docs/           product brief, architecture, ADRs, security, sprint criteria
-compose.yaml    db · migrate · api · worker · sandbox · web
+compose.yaml    local stack: db · migrate · api · worker · sandbox · web
+compose.demo.yaml  public read-only demo (local)
+deploy/         production compose, Caddyfile, scripts, systemd timers
+infra/terraform/   AWS: EC2, Elastic IP, SSM, S3 backups, budget, auto-recovery
 ```
 
 ## Quick start
@@ -84,6 +84,8 @@ Full setup, host-based development and verification commands:
 - [Decisions (ADRs)](docs/decisions/README.md) · [Dependencies](docs/dependencies.md)
 - Acceptance and evidence: [Sprint 1](docs/sprints/sprint-1-acceptance.md) ·
   [Sprint 2](docs/sprints/sprint-2-acceptance.md) · [Sprint 3](docs/sprints/sprint-3-acceptance.md) ·
-  [Sprint 4](docs/sprints/sprint-4-acceptance.md) · [Sprint 5](docs/sprints/sprint-5-acceptance.md)
+  [Sprint 4](docs/sprints/sprint-4-acceptance.md) · [Sprint 5](docs/sprints/sprint-5-acceptance.md) ·
+  [Sprint 6](docs/sprints/sprint-6-acceptance.md)
+- Runbooks: [First deployment](docs/runbooks/first-deployment.md) · [Operations](docs/runbooks/operations.md)
 - Guides: [GitHub App](docs/guides/github-app.md) · [Notifications](docs/guides/notifications.md) ·
   [Public demo](docs/guides/public-demo.md)

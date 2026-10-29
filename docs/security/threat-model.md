@@ -42,11 +42,16 @@ of every sprint that adds a tool, integration or agent.
 | T15 | Leaked GitHub write credential | GitHub App with one-hour, repository-scoped installation tokens; private key only as a mounted file; per-project opt-in; draft PRs on new branches only, never merge (ADR-0013). |
 | T16 | Approved PR content swapped before pushing | The adapter re-hashes the changeset it is about to push and refuses unless it equals the approved hash. |
 | T17 | Public demo abused to act or leak data | Separate deployment and database; refuses to start with credentials; all writes rejected before routing; mock model only. |
+| T19 | Exposed admin surface on the internet | HTTPS only (HSTS), mandatory TOTP 2FA in production, single-use codes, login throttling, no SSH (SSM only), only ports 80/443 open, IMDSv2 with hop limit 1 so containers cannot read instance credentials. |
 | T18 | Chat channel spoofing an approval | Notifications are outbound only; approvals require the authenticated dashboard. |
 | T14 | Docker socket abuse via the sandbox service (socket = host root) | Minimal API (one operation, fixed templates), bearer token, internal network only, input size/path validation. Planned: gVisor runtime and rootless Docker for cloud (Sprint 6). |
 
-## Residual risks accepted for Sprint 1
+## Residual risks (as of Sprint 6)
 
-- Single admin with password auth (no 2FA) on localhost only.
-- Fine-grained PAT instead of a GitHub App.
-- Audit hash chain verification is manual (CLI command) until Sprint 6 monitoring.
+- ~~Password-only admin~~ → TOTP 2FA, mandatory in production (Sprint 6).
+- ~~PAT for writes~~ → GitHub App for writes (Sprint 5); a read-only PAT may still be used for reads.
+- Audit hash-chain verification is manual (`agent-hq verify-audit`, also run after restores).
+- Single VM: no high availability; mitigated by EC2 auto-recovery and S3 backups (ADR-0014).
+- Secrets in a root-only file on the instance rather than a secrets manager.
+- The sandbox service holds the Docker socket (gVisor/rootless Docker not yet applied).
+- Login throttling is in-memory (single API process).

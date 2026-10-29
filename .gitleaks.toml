@@ -1,0 +1,17 @@
+# Secret scanning config (ADR-0014). Extends the default rules; every allowlist entry must
+# be justified here.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known, non-exploitable findings"
+commits = [
+  # GitHub tokens committed to .env.example from the GitHub web UI on 2026-10-28.
+  # Both were revoked the same day (verified: API returns 401).
+  "494a112803625bcdeeed4999cacbbfda8839b675",
+  "74ba6c61b39822eb69e32fe3fc03a82823e19093",
+]
+paths = [
+  # Fake credential shapes used to test log redaction.
+  '''apps/api/tests/test_logging\.py''',
+]

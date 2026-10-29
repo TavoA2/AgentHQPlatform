@@ -68,3 +68,55 @@ jobs:
       - run: docker build -t agent-hq-api apps/api
       - run: docker build -t agent-hq-web apps/web
       - run: docker build -t agent-hq-sandbox-python apps/sandbox-images/python
+      # Report-only for now (ADR-0014): base-image CVEs are tracked, not yet gating.
+      - name: Scan images (Trivy)
+        run: |
+          for image in agent-hq-api agent-hq-web agent-hq-sandbox-python; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:0.67.2 image --quiet --severity HIGH,CRITICAL \
+              --ignore-unfixed --exit-code 0 "$image"
+          done
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # scan the full history
+      - name: Secret scanning (gitleaks)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 \
+            git /repo --no-banner --redact --config /repo/.gitleaks.toml
+      - uses: astral-sh/setup-uv@v6
+      - name: Python dependency audit
+        working-directory: apps/api
+        run: |
+          uv export --no-dev --no-hashes --format requirements-txt -q > /tmp/requirements.txt
+          uvx pip-audit -r /tmp/requirements.txt --no-deps --disable-pip
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: npm dependency audit
+        working-directory: apps/web
+        run: npm audit --omit=dev --audit-level=high
+
+  infrastructure:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+      - name: Lint shell scripts
+        working-directory: deploy/scripts
+        run: shellcheck -x -e SC1091 *.sh
+      - name: Validate production compose
+        working-directory: .
+        run: |
+          cp deploy/env.prod.example .env.prod
+          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci/' .env.prod
+          docker compose --env-file .env.prod -f deploy/compose.prod.yaml config -q

@@ -20,6 +20,7 @@ class Out(BaseModel):
 class LoginIn(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=1024)
+    otp: str | None = Field(default=None, pattern=r"^\d{6}$", description="TOTP code if enrolled")
 
 
 class UserOut(Out):

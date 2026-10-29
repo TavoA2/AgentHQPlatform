@@ -1,0 +1,192 @@
+# Production on a single VM (ADR-0014). Run from the repository root:
+#   docker compose --env-file .env.prod -f deploy/compose.prod.yaml up --build -d
+#
+# Two isolated stacks share only Caddy, the single service with published ports:
+#   private  — your Agent HQ (hq_internal network, its own database, credentials)
+#   demo     — public read-only showcase (demo_internal network, its own database, none)
+name: agent-hq-prod
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+x-hq-backend: &hq-backend
+  build: ../apps/api
+  restart: unless-stopped
+  logging: *logging
+  env_file:
+    - path: ../.env.prod
+  environment:
+    AGENT_HQ_ENVIRONMENT: production
+    AGENT_HQ_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-agent_hq}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-agent_hq}
+    AGENT_HQ_ALLOWED_ORIGINS: '["https://${HQ_DOMAIN:?set HQ_DOMAIN}"]'
+    AGENT_HQ_PUBLIC_URL: https://${HQ_DOMAIN}
+  networks: [hq_internal]
+
+x-demo-backend: &demo-backend
+  build: ../apps/api
+  logging: *logging
+  environment:
+    AGENT_HQ_DEMO_MODE: "true"
+    AGENT_HQ_ENVIRONMENT: production
+    AGENT_HQ_DATABASE_URL: postgresql+psycopg://demo:demo-only@demo-db:5432/agent_hq_demo
+    AGENT_HQ_PUBLIC_URL: https://${DEMO_DOMAIN:?set DEMO_DOMAIN}
+    AGENT_HQ_BRAND_NAME: ${AGENT_HQ_BRAND_NAME:-Veltrix Labs}
+  networks: [demo_internal]
+
+services:
+  caddy:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
+      - "${CADDY_HTTPS_PORT:-443}:443/udp"
+    environment:
+      HQ_DOMAIN: ${HQ_DOMAIN}
+      DEMO_DOMAIN: ${DEMO_DOMAIN}
+      CADDY_GLOBAL_OPTIONS: ${CADDY_GLOBAL_OPTIONS:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [hq_edge, demo_edge]
+    depends_on: [hq-web, demo-web]
+
+  # ---------------- private Agent HQ ----------------
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agent_hq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-agent_hq}
+    volumes: [hq-db:/var/lib/postgresql/data]
+    networks: [hq_internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    <<: *hq-backend
+    restart: "no"
+    command: ["agent-hq", "migrate"]
+    depends_on: { db: { condition: service_healthy } }
+
+  api:
+    <<: *hq-backend
+    command: ["agent-hq", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    <<: *hq-backend
+    command: ["agent-hq", "worker"]
+    volumes: ["../secrets:/run/secrets:ro"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      sandbox: { condition: service_started }
+
+  sandbox-python-image:
+    build: ../apps/sandbox-images/python
+    image: agent-hq-sandbox-python:local
+    command: ["python", "--version"]
+    restart: "no"
+    network_mode: none
+
+  sandbox:
+    build: ../apps/api
+    restart: unless-stopped
+    logging: *logging
+    command: ["agent-hq", "sandbox", "--host", "0.0.0.0", "--port", "8080"]
+    user: "0:0"  # required to use the Docker socket; this service has no published port
+    env_file:
+      - path: ../.env.prod
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
+    networks: [hq_internal]
+    depends_on: { sandbox-python-image: { condition: service_completed_successfully } }
+
+  hq-web:
+    build:
+      context: ../apps/web
+      args: { API_INTERNAL_URL: "http://api:8000" }
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      NEXT_PUBLIC_BRAND_NAME: ${AGENT_HQ_BRAND_NAME:-Veltrix Labs}
+    networks: [hq_internal, hq_edge]
+    depends_on: { api: { condition: service_healthy } }
+
+  # ---------------- public demo ----------------
+  demo-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo-only  # internal network only; holds sample data
+      POSTGRES_DB: agent_hq_demo
+    volumes: [demo-db:/var/lib/postgresql/data]
+    networks: [demo_internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d agent_hq_demo"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  demo-migrate:
+    <<: *demo-backend
+    command: ["agent-hq", "migrate"]
+    depends_on: { demo-db: { condition: service_healthy } }
+
+  demo-seed:
+    <<: *demo-backend
+    command: ["agent-hq", "seed-demo"]
+    depends_on: { demo-migrate: { condition: service_completed_successfully } }
+
+  demo-api:
+    <<: *demo-backend
+    restart: unless-stopped
+    command: ["agent-hq", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    networks:
+      demo_internal:
+        aliases: [api]  # the demo web app reaches it as http://api:8000
+    depends_on: { demo-seed: { condition: service_completed_successfully } }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  demo-web:
+    build:
+      context: ../apps/web
+      args: { API_INTERNAL_URL: "http://api:8000" }
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      NEXT_PUBLIC_BRAND_NAME: ${AGENT_HQ_BRAND_NAME:-Veltrix Labs}
+    networks: [demo_internal, demo_edge]
+    depends_on: { demo-api: { condition: service_healthy } }
+
+networks:
+  hq_internal: { internal: false }  # the worker needs outbound access (GitHub, OpenAI)
+  hq_edge: {}
+  demo_internal: { internal: true }  # the demo never needs the internet
+  demo_edge: {}
+
+volumes:
+  hq-db:
+  demo-db:
+  caddy-data:
+  caddy-config:

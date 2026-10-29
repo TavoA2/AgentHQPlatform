@@ -1,0 +1,32 @@
+# Public entry point (ADR-0014). Certificates are obtained automatically.
+# CADDY_GLOBAL_OPTIONS holds global options: in production "email you@example.com" (for
+# Let's Encrypt notices); the local rehearsal uses "local_certs" (Caddy's own CA).
+{
+	{$CADDY_GLOBAL_OPTIONS}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+		-X-Powered-By
+	}
+}
+
+# Private Agent HQ. No `encode`: compression would buffer the SSE stream; the web app
+# already compresses everything except event streams.
+{$HQ_DOMAIN} {
+	import security_headers
+	header X-Robots-Tag "noindex, nofollow"
+	reverse_proxy hq-web:3000
+}
+
+# Public read-only demo.
+{$DEMO_DOMAIN} {
+	import security_headers
+	reverse_proxy demo-web:3000
+}

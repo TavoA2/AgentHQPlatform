@@ -3,7 +3,7 @@
 Source of truth is the lockfiles (`apps/api/uv.lock`, `apps/web/package-lock.json`).
 This table records the direct dependencies as resolved and verified together.
 
-Last verified: 2026-10-29 (Sprint 5) — lint, typecheck, 179 backend tests against
+Last verified: 2026-10-28 (Sprint 6) — lint, typecheck, 184 backend tests against
 PostgreSQL 17 (including the real Docker sandbox test), web build and the full Docker
 Compose stack passing. Sandbox image: python:3.13-slim + pytest 9.2.0.
 
@@ -12,6 +12,8 @@ Compose stack passing. Sandbox image: python:3.13-slim + pytest 9.2.0.
 | Component | Version |
 |---|---|
 | Python (container / local via uv) | 3.13 |
+| Caddy (production edge) | 2.11 |
+| Terraform (AWS provider) | ≥ 1.6 (~> 6.0) |
 | Node.js | 24 LTS |
 | PostgreSQL | 17 (alpine image) |
 | uv | 0.13 |
@@ -33,6 +35,7 @@ Compose stack passing. Sandbox image: python:3.13-slim + pytest 9.2.0.
 | httpx | 0.28.1 | GitHub and sandbox clients, test client |
 | docker | 7.2.0 | Sandbox runner only (Docker Engine API) |
 | pyjwt[crypto] | 2.15.1 | GitHub App JWT (RS256) |
+| pyotp | 2.10.0 | Admin TOTP 2FA |
 | pytest / ruff / mypy (dev) | 9.2.0 / 0.17.3 / 2.4.0 | Quality gates |
 
 ## Web (`apps/web`)

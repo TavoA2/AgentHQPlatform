@@ -13,6 +13,7 @@ from agent_hq.security.auth import (
     csrf_token_for,
     revoke_session,
 )
+from agent_hq.security.totp import verify_and_consume
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -45,6 +46,12 @@ async def login(
     if throttle.blocked(ip, body.email):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too many attempts, try later")
     user = await authenticate(db, body.email, body.password)
+    if user is not None and user.totp_secret_encrypted:
+        if not body.otp:
+            # Password was right; ask for the second factor (not counted as a failure).
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "otp_required")
+        if not verify_and_consume(settings, user, body.otp):
+            user = None
     if user is None:
         throttle.record_failure(ip, body.email)
         await record_audit(
@@ -56,6 +63,11 @@ async def login(
         )
         await db.commit()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid credentials")
+    if settings.environment == "production" and not user.totp_secret_encrypted:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "two-factor authentication is required in production: run agent-hq enable-2fa",
+        )
     throttle.reset(body.email)
     token = await create_session(
         db, settings, user, ip=ip, user_agent=request.headers.get("user-agent")

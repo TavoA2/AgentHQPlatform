@@ -143,6 +143,57 @@ async def _seed_demo() -> int:
     return 0
 
 
+async def _two_factor(email: str, enable: bool) -> int:
+    from sqlalchemy import func, select
+
+    from agent_hq.db import create_engine, create_sessionmaker
+    from agent_hq.events import record_audit
+    from agent_hq.models import User, utcnow
+    from agent_hq.security import totp
+
+    settings = get_settings()
+    engine = create_engine(settings)
+    try:
+        async with create_sessionmaker(engine)() as session:
+            user = await session.scalar(select(User).where(func.lower(User.email) == email.lower()))
+            if user is None:
+                print(f"No user {email}", file=sys.stderr)
+                return 1
+            if not enable:
+                user.totp_secret_encrypted = None
+                user.totp_enabled_at = None
+                user.totp_last_step = None
+                action = "user.2fa_disabled"
+            else:
+                secret = totp.new_secret()
+                print("Add this account to your authenticator app (Google Authenticator,")
+                print("1Password, Authy...) by scanning or pasting this URI:\n")
+                print(totp.provisioning_uri(secret, user.email, settings.brand_name))
+                print(f"\nOr enter the secret manually: {secret}\n")
+                prompt = "Enter the 6-digit code shown by the app to confirm: "
+                code = (await asyncio.to_thread(input, prompt)).strip()
+                if totp.matching_step(secret, code) is None:
+                    print("Code did not match; 2FA was NOT enabled.", file=sys.stderr)
+                    return 1
+                user.totp_secret_encrypted = totp.encrypt_secret(settings, secret)
+                user.totp_enabled_at = utcnow()
+                user.totp_last_step = None
+                action = "user.2fa_enabled"
+            await record_audit(
+                session,
+                actor_type="system",
+                actor_id="cli",
+                action=action,
+                resource_type="user",
+                resource_id=user.id,
+            )
+            await session.commit()
+    finally:
+        await engine.dispose()
+    print(f"{action}: {email}")
+    return 0
+
+
 async def _verify_audit() -> int:
     from agent_hq.db import create_engine, create_sessionmaker
     from agent_hq.events import verify_audit_chain
@@ -171,6 +222,10 @@ def main() -> None:
     admin.add_argument("--name", default="Administrator")
     sub.add_parser("verify-audit", help="verify the audit log hash chain")
     sub.add_parser("seed-demo", help="fill a demo-mode database by running real workflows")
+    enable_2fa = sub.add_parser("enable-2fa", help="enroll an authenticator app (TOTP)")
+    enable_2fa.add_argument("--email", required=True)
+    disable_2fa = sub.add_parser("disable-2fa", help="remove 2FA (e.g. lost device)")
+    disable_2fa.add_argument("--email", required=True)
     sandbox = sub.add_parser("sandbox", help="run the sandbox runner (needs Docker access)")
     sandbox.add_argument("--host", default="127.0.0.1")
     sandbox.add_argument("--port", type=int, default=8080)
@@ -203,6 +258,8 @@ def main() -> None:
         code = migrate()
     elif args.command == "worker":
         code = _run(_worker())
+    elif args.command in ("enable-2fa", "disable-2fa"):
+        code = _run(_two_factor(args.email, enable=args.command == "enable-2fa"))
     elif args.command == "seed-demo":
         code = _run(_seed_demo())
     elif args.command == "create-admin":

@@ -1,0 +1,8 @@
+[Unit]
+Description=Agent HQ database backup to S3
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/agent-hq/app/deploy/scripts/backup.sh

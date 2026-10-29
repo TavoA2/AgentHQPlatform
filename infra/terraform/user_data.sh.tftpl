@@ -1,0 +1,36 @@
+#!/bin/bash
+# Cloud-init bootstrap (ADR-0014). Installs Docker, clones the repository and installs the
+# systemd timers. It does NOT start the stacks: secrets are added by the owner first
+# (docs/runbooks/first-deployment.md). No secrets are passed through user data.
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y docker.io docker-compose-v2 git curl unzip
+systemctl enable --now docker
+
+# AWS CLI v2 (backups to S3).
+if ! command -v aws >/dev/null; then
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscli.zip
+  unzip -q /tmp/awscli.zip -d /tmp
+  /tmp/aws/install
+fi
+
+install -d -m 755 /opt/agent-hq
+if [ ! -d /opt/agent-hq/app/.git ]; then
+  git clone --branch "${git_ref}" "${repo_url}" /opt/agent-hq/app
+fi
+install -d -m 700 /opt/agent-hq/app/secrets
+
+cat > /etc/agent-hq.env <<EOF
+AGENT_HQ_ROOT=/opt/agent-hq/app
+AWS_REGION=${region}
+BACKUP_BUCKET=${backup_bucket}
+EOF
+chmod 600 /etc/agent-hq.env
+
+install -m 644 /opt/agent-hq/app/deploy/systemd/*.service /opt/agent-hq/app/deploy/systemd/*.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable agent-hq-backup.timer agent-hq-health.timer
+
+echo "agent-hq bootstrap complete: add /opt/agent-hq/app/.env.prod, then run deploy/scripts/deploy.sh"

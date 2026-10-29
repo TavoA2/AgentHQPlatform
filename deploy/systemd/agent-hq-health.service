@@ -1,0 +1,8 @@
+[Unit]
+Description=Agent HQ readiness check with self-healing
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/agent-hq/app/deploy/scripts/healthcheck.sh

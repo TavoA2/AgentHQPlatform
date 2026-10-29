@@ -26,3 +26,10 @@ desktop.ini
 
 # Local secrets (GitHub App private key, ...)
 secrets/
+
+# Terraform
+infra/terraform/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example

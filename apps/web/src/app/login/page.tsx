@@ -3,13 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, ErrorNote, inputClass } from "@/components/ui";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { brandName } from "@/lib/brand";
 
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  // Shown once the API confirms the password and asks for the authenticator code.
+  const [needsCode, setNeedsCode] = useState(false);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -19,11 +21,19 @@ export default function LoginPage() {
     try {
       await api("/auth/login", {
         method: "POST",
-        body: { email: form.get("email"), password: form.get("password") },
+        body: {
+          email: form.get("email"),
+          password: form.get("password"),
+          otp: needsCode ? form.get("otp") : undefined,
+        },
       });
       router.replace("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-in failed");
+      if (err instanceof ApiError && err.message === "otp_required") {
+        setNeedsCode(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Sign-in failed");
+      }
       setBusy(false);
     }
   }
@@ -50,9 +60,24 @@ export default function LoginPage() {
             className={inputClass}
           />
         </label>
+        {needsCode && (
+          <label className="flex flex-col gap-1 text-sm">
+            Authenticator code
+            <input
+              name="otp"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="\d{6}"
+              maxLength={6}
+              required
+              autoFocus
+              className={`${inputClass} font-mono tracking-[0.4em]`}
+            />
+          </label>
+        )}
         <ErrorNote message={error} />
         <Button type="submit" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? "Signing in…" : needsCode ? "Verify" : "Sign in"}
         </Button>
       </form>
     </main>

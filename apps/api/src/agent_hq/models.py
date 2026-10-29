@@ -79,6 +79,10 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow, server_default=func.now())
     last_login_at: Mapped[datetime | None]
+    # TOTP 2FA (security/totp.py): encrypted secret, enrollment time, last used step.
+    totp_secret_encrypted: Mapped[str | None] = mapped_column(Text)
+    totp_enabled_at: Mapped[datetime | None]
+    totp_last_step: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class UserSession(Base):

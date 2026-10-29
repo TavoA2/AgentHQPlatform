@@ -18,3 +18,4 @@ Format: Context → Decision → Consequences. Status is `Accepted`, `Proposed` 
 | [0011](0011-multi-agent-plans-and-sandbox.md) | Multi-agent plans, parallel waves, sandbox runner | Accepted |
 | [0012](0012-the-brain.md) | The Brain: scoped, versioned knowledge with provenance | Accepted |
 | [0013](0013-integrations-and-demo.md) | GitHub App writes, notification outbox, public demo mode | Accepted |
+| [0014](0014-single-vm-deployment.md) | Single-VM AWS deployment: Caddy, SSM, S3 backups, 2FA in production | Accepted |
