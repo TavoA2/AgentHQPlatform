@@ -4,12 +4,14 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from agent_hq.agents import CIO
+from agent_hq.alerts import unread_count
 from agent_hq.api.deps import DbDep, PrincipalDep, SettingsDep
 from agent_hq.api.schemas import (
     AcceptProposalIn,
+    AlertsOut,
     ChatMessageIn,
     ChatMessageOut,
     ConversationDetailOut,
@@ -72,6 +74,31 @@ async def create_conversation(
     db.add(conversation)
     await db.commit()
     return ConversationOut.model_validate(conversation)
+
+
+@router.get("/alerts")
+async def alerts_status(principal: PrincipalDep, db: DbDep) -> AlertsOut:
+    """The owner's Alerts conversation (ADR-0016) and how many alerts are unread."""
+    conversation = await db.scalar(
+        select(Conversation).where(
+            Conversation.user_id == principal.user.id, Conversation.kind == "alerts"
+        )
+    )
+    if conversation is None:
+        return AlertsOut(conversation_id=None, unread=0)
+    return AlertsOut(conversation_id=conversation.id, unread=await unread_count(db, conversation))
+
+
+@router.post("/{conversation_id}/read")
+async def mark_read(conversation_id: uuid.UUID, principal: PrincipalDep, db: DbDep) -> AlertsOut:
+    conversation = await _conversation(db, principal, conversation_id)
+    conversation.last_read_message_id = await db.scalar(
+        select(func.max(ConversationMessage.id)).where(
+            ConversationMessage.conversation_id == conversation.id
+        )
+    )
+    await db.commit()
+    return AlertsOut(conversation_id=conversation.id, unread=0)
 
 
 @router.get("/{conversation_id}")

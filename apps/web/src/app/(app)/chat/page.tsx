@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageBubble } from "@/components/chat";
 import { Button, Card, ErrorNote, formatTime, inputClass } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
 import { useCanAct } from "@/lib/session";
-import type { Conversation, ConversationDetail, Project } from "@/lib/types";
+import {
+  ALERTS_READ_EVENT,
+  type AlertsStatus,
+  type Conversation,
+  type ConversationDetail,
+  type Project,
+} from "@/lib/types";
 
 const POLL_MS = 1500;
 
@@ -13,10 +19,25 @@ export default function ChatPage() {
   const canAct = useCanAct();
   const conversations = useApi<Conversation[]>("/conversations");
   const projects = useApi<Project[]>("/projects");
+  const alerts = useApi<AlertsStatus>("/conversations/alerts");
   const [selected, setSelected] = useState<string | null>(null);
   const [scope, setScope] = useState("");
   const [error, setError] = useState<string>();
-  const activeId = selected ?? conversations.data?.[0]?.id ?? null;
+  // Unread alerts open first; otherwise the most recent conversation.
+  const unreadAlerts = alerts.data?.unread ? alerts.data.conversation_id : null;
+  const activeId = selected ?? unreadAlerts ?? conversations.data?.[0]?.id ?? null;
+  const reloadAlerts = alerts.reload;
+  // Reading the alerts keeps that thread open (it would otherwise lose its "unread" priority).
+  const handleRead = useCallback(
+    (id: string) => {
+      setSelected(id);
+      reloadAlerts();
+    },
+    [reloadAlerts],
+  );
+  const ordered = [...(conversations.data ?? [])].sort(
+    (a, b) => Number(b.kind === "alerts") - Number(a.kind === "alerts"),
+  );
   const projectKey = (id: string | null) =>
     id ? (projects.data?.find((p) => p.id === id)?.key ?? "project") : "company-wide";
 
@@ -69,7 +90,7 @@ export default function ChatPage() {
             )}
             <ErrorNote message={conversations.error} />
             <ul className="flex flex-col gap-1">
-              {conversations.data?.map((c) => (
+              {ordered.map((c) => (
                 <li key={c.id}>
                   <button
                     onClick={() => setSelected(c.id)}
@@ -77,7 +98,14 @@ export default function ChatPage() {
                       c.id === activeId ? "bg-background text-foreground" : "text-muted hover:text-foreground"
                     }`}
                   >
-                    <span className="block truncate">{c.title}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate">{c.title}</span>
+                      {c.kind === "alerts" && (alerts.data?.unread ?? 0) > 0 && (
+                        <span className="rounded-full bg-violet px-1.5 font-mono text-[10px] text-background">
+                          {alerts.data?.unread}
+                        </span>
+                      )}
+                    </span>
                     <span className="font-mono text-[10px]">
                       {projectKey(c.project_id)} · {formatTime(c.updated_at)}
                     </span>
@@ -97,6 +125,7 @@ export default function ChatPage() {
             canAct={canAct}
             scopeLabel={projectKey}
             onActivity={conversations.reload}
+            onRead={handleRead}
           />
         ) : (
           <Card>
@@ -115,11 +144,13 @@ function Thread({
   canAct,
   scopeLabel,
   onActivity,
+  onRead,
 }: {
   conversationId: string;
   canAct: boolean;
   scopeLabel: (projectId: string | null) => string;
   onActivity: () => void;
+  onRead: (conversationId: string) => void;
 }) {
   const detail = useApi<ConversationDetail>(`/conversations/${conversationId}`);
   const { reload } = detail;
@@ -140,6 +171,24 @@ function Thread({
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
   }, [messages.length, pending]);
+
+  // New alerts arrive in the background; keep an open Alerts thread current and read.
+  const isAlerts = detail.data?.kind === "alerts";
+  const lastId = messages.at(-1)?.id;
+  useEffect(() => {
+    if (!isAlerts) return;
+    const timer = setInterval(reload, 15000);
+    return () => clearInterval(timer);
+  }, [isAlerts, reload]);
+  useEffect(() => {
+    if (!isAlerts || !canAct || lastId === undefined) return;
+    api(`/conversations/${conversationId}/read`, { method: "POST" })
+      .then(() => {
+        onRead(conversationId);
+        window.dispatchEvent(new Event(ALERTS_READ_EVENT));
+      })
+      .catch(() => undefined);
+  }, [isAlerts, canAct, lastId, conversationId, onRead]);
 
   async function send() {
     const content = draft.trim();
@@ -170,7 +219,13 @@ function Thread({
       <div className="flex flex-col gap-4">
         <ErrorNote message={detail.error} />
         <div className="flex max-h-[60vh] min-h-[240px] flex-col gap-3 overflow-y-auto pr-1" aria-live="polite">
-          {messages.length === 0 && !detail.loading && (
+          {isAlerts && (
+            <p className="text-xs text-muted">
+              Dixon posts alerts here: approvals needed, finished or failed work, reminders and a
+              daily briefing. Reply to ask about any of them. Nothing can be approved from here.
+            </p>
+          )}
+          {messages.length === 0 && !detail.loading && !isAlerts && (
             <p className="text-sm text-muted">
               Try: “¿Qué tareas hay y qué espera mi aprobación?” or “Revisa el CI/CD de owner/repo”.
             </p>

@@ -209,7 +209,7 @@ async def test_notifications_are_delivered_once_with_retries(harness: Harness) -
         rows = list(await session.scalars(select(Notification)))
     # Only the top-level milestone; the DevOps subtask's completion is not announced.
     assert [r.kind for r in rows] == ["approval_requested"]
-    assert rows[0].delivered_channels == ["slack"] and rows[0].attempts == 1
+    assert rows[0].delivered_channels == ["app", "slack"] and rows[0].attempts == 1
 
     async with harness.app.state.sessionmaker() as session:
         await session.execute(update(Notification).values(run_after=func.now()))
@@ -224,15 +224,15 @@ async def test_notifications_are_delivered_once_with_retries(harness: Harness) -
     assert "secret" not in json.dumps(chat.sent)
 
 
-async def test_notifications_skip_when_no_channel(harness: Harness) -> None:
+async def test_notifications_go_in_app_without_external_channels(harness: Harness) -> None:
     await harness.login()
     project = await harness.create_project_with_repos(["acme/shop"])
     task_id = await harness.create_task(project, "Review the CI pipeline of acme/shop.")
     await harness.client.post(f"/tasks/{task_id}/start")
     await harness.run_worker()
     async with harness.app.state.sessionmaker() as session:
-        statuses = list(await session.scalars(select(Notification.status)))
-    assert statuses == ["skipped"]
+        rows = list(await session.scalars(select(Notification)))
+    assert [(r.status, r.delivered_channels) for r in rows] == [("sent", ["app"])]
 
 
 def test_demo_refuses_real_credentials(settings: Settings) -> None:
@@ -282,7 +282,10 @@ async def test_demo_seed_and_read_only_access(harness: Harness) -> None:
         ]  # fmt: skip
         assert len((await visitor.get("/knowledge")).json()) >= 4
         approval = (await visitor.get("/approvals", params={"status": "pending"})).json()[0]
-        [conversation] = (await visitor.get("/conversations")).json()
+        conversations = (await visitor.get("/conversations")).json()
+        assert sorted(c["kind"] for c in conversations) == ["alerts", "chat"]
+        [conversation] = [c for c in conversations if c["kind"] == "chat"]
+        assert (await visitor.get("/conversations/alerts")).json()["unread"] >= 1
         chat = (await visitor.get(f"/conversations/{conversation['id']}")).json()
         assert [m["status"] for m in chat["messages"]] == ["complete"] * 4
         assert "Pending approvals:" in chat["messages"][1]["content"]

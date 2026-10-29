@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Button, ErrorNote } from "@/components/ui";
+import { Button, ErrorNote, formatTime } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { ChatMessage, ChatProposal, Task } from "@/lib/types";
 
@@ -128,7 +128,12 @@ export function MessageBubble({
   }
   return (
     <div className="mr-auto flex max-w-[90%] flex-col gap-2 rounded-lg rounded-bl-sm border border-border bg-surface px-3 py-2">
-      <span className="font-mono text-[11px] uppercase tracking-wider text-violet">Dixon</span>
+      <span className="font-mono text-[11px] uppercase tracking-wider text-violet">
+        Dixon
+        {message.alert_kind && (
+          <span className="ml-2 text-orange">· alert · {message.alert_kind.replaceAll("_", " ")} · {formatTime(message.created_at)}</span>
+        )}
+      </span>
       {message.status === "pending" && (
         <p className="animate-pulse text-sm text-muted" aria-live="polite">
           Dixon is checking…

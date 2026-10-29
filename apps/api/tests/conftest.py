@@ -108,6 +108,9 @@ def settings(clean_db: str) -> Settings:
         max_parallel_steps=2,
         job_lease_seconds=60,
         approval_ttl_hours=24,
+        # Time-based alerts depend on the wall clock; tests enable them explicitly.
+        alert_approval_reminder_hours=0,
+        alert_daily_brief_hour_utc=-1,
     )
 
 

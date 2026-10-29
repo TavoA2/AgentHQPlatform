@@ -319,6 +319,7 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   status: "pending" | "complete" | "failed";
+  alert_kind: string | null;
   tool_calls: ChatToolCall[];
   proposals: ChatProposal[];
   error: string | null;
@@ -335,8 +336,14 @@ export type Conversation = {
   id: string;
   project_id: string | null;
   title: string;
+  kind: "chat" | "alerts";
   created_at: string;
   updated_at: string;
 };
 
 export type ConversationDetail = Conversation & { messages: ChatMessage[] };
+
+export type AlertsStatus = { conversation_id: string | null; unread: number };
+
+/** Fired after alerts are marked read so the header badge refreshes at once. */
+export const ALERTS_READ_EVENT = "agent-hq:alerts-read";

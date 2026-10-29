@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: str | None = None
 
+    # --- Proactive alerts (ADR-0016); delivered in-app and to the channels above ---
+    alert_language: Literal["en", "es"] = "en"
+    alert_approval_reminder_hours: int = 4  # 0 = no reminders
+    alert_daily_brief_hour_utc: int = Field(default=13, ge=-1, le=23)  # -1 = no briefing
+
     # --- Public read-only demo (ADR-0013) ---
     demo_mode: bool = False
 

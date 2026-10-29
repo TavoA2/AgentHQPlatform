@@ -217,6 +217,7 @@ class ConversationOut(Out):
     id: uuid.UUID
     project_id: uuid.UUID | None
     title: str
+    kind: str
     created_at: datetime
     updated_at: datetime
 
@@ -230,6 +231,7 @@ class ChatMessageOut(Out):
     role: str
     content: str
     status: str
+    alert_kind: str | None
     tool_calls: list[dict[str, Any]]
     proposals: list[dict[str, Any]]
     error: str | None
@@ -248,3 +250,8 @@ class ConversationDetailOut(ConversationOut):
 
 class AcceptProposalIn(BaseModel):
     start: bool = Field(default=False, description="Also start the task right away")
+
+
+class AlertsOut(BaseModel):
+    conversation_id: uuid.UUID | None
+    unread: int

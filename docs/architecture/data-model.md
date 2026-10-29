@@ -100,6 +100,9 @@ created_at, updated_at`. `conversation_messages`: `id bigint identity, conversat
 role ('user'|'assistant'), content, status ('pending'|'complete'|'failed'), tool_calls
 (jsonb), proposals (jsonb: task proposals and, once accepted, the task id), error,
 model_provider, model_name, tokens_in, tokens_out, cost_usd, created_at, completed_at`.
+Sprint 8 (ADR-0016): `conversations.kind` (`chat` | `alerts`, one alerts thread per user)
+and `last_read_message_id`; `conversation_messages.alert_kind` marks Dixon's alerts, which
+are delivered from the `notifications` outbox through the always-on `app` channel.
 
 ## Task status machine
 

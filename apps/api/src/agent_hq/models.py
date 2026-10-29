@@ -21,6 +21,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -285,7 +286,9 @@ class Job(Base):
     status: Mapped[JobStatus] = mapped_column(_enum(JobStatus, "job_status"))
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, default=3)
-    run_after: Mapped[datetime] = mapped_column(default=utcnow)
+    # Database clock: claims compare it with now() in SQL, so a host clock running ahead
+    # of the database must not delay new jobs.
+    run_after: Mapped[datetime] = mapped_column(server_default=func.now())
     locked_by: Mapped[str | None] = mapped_column(String(120))
     lease_expires_at: Mapped[datetime | None]
     last_error: Mapped[str | None] = mapped_column(Text)
@@ -409,10 +412,22 @@ class Conversation(Base):
         ForeignKey("projects.id", ondelete="CASCADE")
     )
     title: Mapped[str] = mapped_column(String(200))
+    # "chat", or "alerts": the one per-user thread where Dixon posts alerts (ADR-0016).
+    kind: Mapped[str] = mapped_column(String(16), default="chat")
+    last_read_message_id: Mapped[int | None] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow)
 
-    __table_args__ = (Index("ix_conversations_user_updated", "user_id", "updated_at"),)
+    __table_args__ = (
+        CheckConstraint("kind IN ('chat', 'alerts')", name="kind"),
+        Index("ix_conversations_user_updated", "user_id", "updated_at"),
+        Index(
+            "uq_conversations_user_alerts",
+            "user_id",
+            unique=True,
+            postgresql_where=text("kind = 'alerts'"),
+        ),
+    )
 
 
 class ConversationMessage(Base):
@@ -424,6 +439,7 @@ class ConversationMessage(Base):
     )
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text, default="")
+    alert_kind: Mapped[str | None] = mapped_column(String(48))  # set on Dixon's alerts
     status: Mapped[str] = mapped_column(String(16), default="complete")
     # Tools the reply used ({name, arguments, ok, error}) and task proposals awaiting the
     # owner's confirmation ({id, project_id, title, request, ..., task_id once accepted}).

@@ -16,7 +16,7 @@ from langgraph.types import Command
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
-from agent_hq import jobs
+from agent_hq import alerts, jobs
 from agent_hq.chat import fail_turn, run_turn
 from agent_hq.config import Settings
 from agent_hq.domain import TERMINAL, DomainError, JobKind, TaskCancelledError
@@ -156,9 +156,19 @@ class Worker:
                     max_attempts=self.settings.job_max_attempts,
                 )
             await session.commit()
+        await self.schedule_alerts()
         await self.deliver_notifications()
         if requeued:
             logger.warning("requeued jobs with expired leases", extra={"job_ids": requeued})
+
+    async def schedule_alerts(self) -> None:
+        try:
+            async with self.runtime.sessionmaker() as session:
+                await alerts.schedule(session, self.settings)
+                await session.commit()
+        except Exception:
+            # Like delivery, alert scheduling must never stop agent work.
+            logger.exception("alert scheduling failed")
 
     async def deliver_notifications(self) -> None:
         try:

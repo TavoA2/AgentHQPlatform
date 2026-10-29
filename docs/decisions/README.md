@@ -20,3 +20,4 @@ Format: Context → Decision → Consequences. Status is `Accepted`, `Proposed` 
 | [0013](0013-integrations-and-demo.md) | GitHub App writes, notification outbox, public demo mode | Accepted |
 | [0014](0014-single-vm-deployment.md) | Single-VM AWS deployment: Caddy, SSM, S3 backups, 2FA in production | Accepted |
 | [0015](0015-chat-with-dixon.md) | Chat with Dixon: worker-run turns, read-only tools, human-confirmed task proposals | Accepted |
+| [0016](0016-proactive-alerts.md) | Proactive alerts: in-app channel on the outbox, reminders, daily briefing written by code | Accepted |

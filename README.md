@@ -4,9 +4,10 @@ Internal AI virtual operations platform for **Veltrix Labs** (provisional brand)
 administrator supervises specialized AI agents that plan, execute and report real work,
 with human approval for sensitive actions.
 
-> Status: **seven sprints delivered.** You can chat with Dixon in the dashboard: answers come
+> Status: **eight sprints delivered.** You can chat with Dixon in the dashboard: answers come
 > from real tasks, approvals, agents and The Brain, and new work is proposed for you to
-> confirm (Sprint 7). Dixon (the AI CIO, LangGraph) routes each
+> confirm (Sprint 7). Dixon also speaks first: alerts, approval reminders and a daily
+> briefing in its Alerts thread and on Slack/Telegram (Sprint 8). Dixon (the AI CIO, LangGraph) routes each
 > request to a workflow and delegates it as visible subtasks: a DevOps agent reviews CI/CD,
 > or a Software Engineer and a QA agent work in parallel on a change that QA tests in an
 > isolated Docker sandbox. Results are verified by code against evidence, a human approves
@@ -42,6 +43,7 @@ apps/
       integrations/   GitHub (read-only), report publisher (mock)
       tools.py        tool registry + the single, policy-checked execution path
       chat.py         chat with Dixon; chat_tools.py holds its read-only tools
+      alerts.py       Dixon's proactive alerts: reminders, daily briefing, in-app delivery
       models.py       ORM models · migrations/ holds Alembic revisions
   web/          Next.js 16 (App Router) · TypeScript · Tailwind CSS v4
   sandbox-images/ images for sandboxed test runs (python: stdlib + pytest)
@@ -89,7 +91,8 @@ Full setup, host-based development and verification commands:
 - Acceptance and evidence: [Sprint 1](docs/sprints/sprint-1-acceptance.md) ·
   [Sprint 2](docs/sprints/sprint-2-acceptance.md) · [Sprint 3](docs/sprints/sprint-3-acceptance.md) ·
   [Sprint 4](docs/sprints/sprint-4-acceptance.md) · [Sprint 5](docs/sprints/sprint-5-acceptance.md) ·
-  [Sprint 6](docs/sprints/sprint-6-acceptance.md) · [Sprint 7](docs/sprints/sprint-7-acceptance.md)
+  [Sprint 6](docs/sprints/sprint-6-acceptance.md) · [Sprint 7](docs/sprints/sprint-7-acceptance.md) ·
+  [Sprint 8](docs/sprints/sprint-8-acceptance.md)
 - Runbooks: [First deployment](docs/runbooks/first-deployment.md) · [Operations](docs/runbooks/operations.md)
 - Guides: [GitHub App](docs/guides/github-app.md) · [Notifications](docs/guides/notifications.md) ·
   [Public demo](docs/guides/public-demo.md)

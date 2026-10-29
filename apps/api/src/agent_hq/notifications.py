@@ -1,7 +1,8 @@
 """Outbound notifications through a transactional outbox (ADR-0013).
 
-Rows are written in the same transaction as the task transition that causes them, and the
-worker delivers them with retries. Messages carry a title, a status and a dashboard link
+Rows are written in the same transaction as the task transition that causes them (or by the
+alert scheduler, ADR-0016), and the worker delivers them with retries: in-app as a Dixon
+message, plus Slack/Telegram when configured. Messages carry a title, a status and a dashboard link
 only; nothing can be approved from a chat message.
 """
 
@@ -13,6 +14,8 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent_hq.alerts import deliver_in_app
+from agent_hq.alerts import render as render_alert
 from agent_hq.config import Settings
 from agent_hq.domain import TaskStatus
 from agent_hq.models import Notification, Task, utcnow
@@ -42,10 +45,17 @@ async def enqueue_for_transition(session: AsyncSession, task: Task, target: Task
                 "headline": headline,
                 "title": task.title[:120],
                 "reason": task.failure_reason if target == TaskStatus.FAILED else None,
+                "summary": _outcome(task) if target == TaskStatus.COMPLETED else None,
             },
         )
     )
     await session.flush()
+
+
+def _outcome(task: Task) -> str | None:
+    summary = (task.result or {}).get("summary") or {}
+    outcome = summary.get("outcome") if isinstance(summary, dict) else None
+    return str(outcome)[:400] if outcome else None
 
 
 class Notifier:
@@ -57,8 +67,9 @@ class Notifier:
         await self._http.aclose()
 
     def channels(self) -> list[str]:
+        """The in-app channel (Dixon's Alerts conversation, ADR-0016) is always on."""
         s = self._settings
-        configured = []
+        configured = ["app"]
         if s.slack_webhook_url and s.slack_webhook_url.get_secret_value():
             configured.append("slack")
         if s.telegram_bot_token and s.telegram_bot_token.get_secret_value() and s.telegram_chat_id:
@@ -66,13 +77,9 @@ class Notifier:
         return configured
 
     def render(self, n: Notification) -> str:
-        p = n.payload
-        lines = [f"[{self._settings.brand_name} · Agent HQ] {p.get('headline')}: {p.get('title')}"]
-        if p.get("reason"):
-            lines.append(f"Reason: {p['reason']}")
-        if n.task_id:
-            lines.append(f"{self._settings.public_url.rstrip('/')}/tasks/{n.task_id}")
-        return "\n".join(lines)
+        base_url = self._settings.public_url.rstrip("/")
+        text = render_alert(self._settings, n, base_url=base_url)
+        return f"[{self._settings.brand_name} · Agent HQ] {text}"
 
     async def _send(self, channel: str, text: str) -> None:
         s = self._settings
@@ -106,15 +113,16 @@ class Notifier:
         )
         channels = self.channels()
         for n in rows:
-            if not channels:
-                n.status = "skipped"
-                continue
             text = self.render(n)
             delivered = list(n.delivered_channels)
             errors = []
             for channel in channels:
                 if channel in delivered:
                     continue  # retries never duplicate a channel that already got it
+                if channel == "app":
+                    await deliver_in_app(session, self._settings, n)
+                    delivered.append(channel)
+                    continue
                 try:
                     await self._send(channel, text)
                     delivered.append(channel)
