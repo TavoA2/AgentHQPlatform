@@ -39,6 +39,10 @@ of every sprint that adds a tool, integration or agent.
 | T11 | Supply-chain compromise of dependencies or CI | Lockfiles, `--locked` installs, Dependabot, SHA-pinned actions before secrets reach CI, least-privilege `GITHUB_TOKEN` permissions. |
 | T12 | False success reports | Task cannot reach `COMPLETED` without a recorded verification result and evidence references; QA/verification is a separate step from execution. |
 | T13 | Database exposed on the network | Postgres port bound to `127.0.0.1` locally; private subnet in cloud; separate DB role for the app without superuser. |
+| T15 | Leaked GitHub write credential | GitHub App with one-hour, repository-scoped installation tokens; private key only as a mounted file; per-project opt-in; draft PRs on new branches only, never merge (ADR-0013). |
+| T16 | Approved PR content swapped before pushing | The adapter re-hashes the changeset it is about to push and refuses unless it equals the approved hash. |
+| T17 | Public demo abused to act or leak data | Separate deployment and database; refuses to start with credentials; all writes rejected before routing; mock model only. |
+| T18 | Chat channel spoofing an approval | Notifications are outbound only; approvals require the authenticated dashboard. |
 | T14 | Docker socket abuse via the sandbox service (socket = host root) | Minimal API (one operation, fixed templates), bearer token, internal network only, input size/path validation. Planned: gVisor runtime and rootless Docker for cloud (Sprint 6). |
 
 ## Residual risks accepted for Sprint 1

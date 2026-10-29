@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api, useApi } from "@/lib/api";
 import { brandName } from "@/lib/brand";
 import { LiveEventsProvider, useLiveConnection, useLiveRefresh } from "@/lib/live-events";
+import { SessionProvider } from "@/lib/session";
 import type { Approval, Session } from "@/lib/types";
 
 const NAV = [
@@ -33,9 +34,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <div className="flex flex-1 items-center justify-center text-muted">Loading…</div>;
   }
   return (
-    <LiveEventsProvider>
-      <Shell session={session}>{children}</Shell>
-    </LiveEventsProvider>
+    <SessionProvider value={session}>
+      <LiveEventsProvider>
+        <Shell session={session}>{children}</Shell>
+      </LiveEventsProvider>
+    </SessionProvider>
   );
 }
 
@@ -44,6 +47,7 @@ function Shell({ session, children }: { session: Session; children: React.ReactN
   const router = useRouter();
   const connected = useLiveConnection();
   const pending = useApi<Approval[]>("/approvals?status=pending");
+  const viewer = session.user.role === "viewer";
   useLiveRefresh(pending.reload, (e) => e.type.startsWith("approval_"));
 
   async function logout() {
@@ -84,10 +88,17 @@ function Shell({ session, children }: { session: Session; children: React.ReactN
           >
             {connected ? "● live" : "○ reconnecting"}
           </span>
-          <button onClick={logout} className="text-sm text-muted hover:text-foreground" title={session.user.email}>
-            Sign out
-          </button>
+          {!viewer && (
+            <button onClick={logout} className="text-sm text-muted hover:text-foreground" title={session.user.email}>
+              Sign out
+            </button>
+          )}
         </div>
+        {viewer && (
+          <p className="border-t border-orange/30 bg-orange/10 px-4 py-1.5 text-center text-xs text-orange">
+            Public demo · read-only · sample clients and data produced by the real agent pipeline
+          </p>
+        )}
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
     </div>

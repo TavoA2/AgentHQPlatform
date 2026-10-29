@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agent_hq.domain import TaskStatus, check_transition
 from agent_hq.events import ActorType, record_audit, record_task_event
 from agent_hq.models import Task, utcnow
+from agent_hq.notifications import enqueue_for_transition
 
 
 async def transition(
@@ -42,6 +43,8 @@ async def transition(
     if target == TaskStatus.COMPLETED:
         task.completed_at = utcnow()
     await session.flush()
+    # Same transaction as the transition: a notification is never lost or invented.
+    await enqueue_for_transition(session, task, target)
     payload: dict[str, Any] = {"from": current.value, "to": target.value, **(extra or {})}
     if reason:
         payload["reason"] = reason

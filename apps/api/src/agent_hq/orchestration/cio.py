@@ -83,6 +83,7 @@ class CioState(TypedDict, total=False):
     model_override: str | None
     cio_execution_id: str
     allowed_repos: list[str]
+    pull_requests: bool
     requirements: dict[str, Any]
     workflow: str
     plan: list[dict[str, Any]]
@@ -339,10 +340,20 @@ def build_cio_graph(
                 )
             )
             allowed = list(integration.config.get("allowed_repos", [])) if integration else []
+            # Real pull requests need both an App and the owner's per-project opt-in.
+            pull_requests = bool(
+                integration
+                and integration.config.get("pull_requests") is True
+                and runtime.pull_requests is not None
+            )
             state = {**state, "cio_execution_id": str(execution.id)}
             await _step_event(session, state, "intake", authorized_repositories=allowed)
             await session.commit()
-        return {"cio_execution_id": str(execution.id), "allowed_repos": allowed}
+        return {
+            "cio_execution_id": str(execution.id),
+            "allowed_repos": allowed,
+            "pull_requests": pull_requests,
+        }
 
     async def analyze(state: CioState) -> CioState:
         task_id, project_id = _ids(state)
@@ -695,7 +706,11 @@ def build_cio_graph(
             changeset = results[implement.id]
             qa = results[run_tests.id]
             args: Any = ProposeChangesetArgs(
-                target=f"mock://pull-requests/{state['requirements']['repository']}",
+                target=(
+                    f"github://{state['requirements']['repository']}/pulls"
+                    if state.get("pull_requests")
+                    else f"mock://pull-requests/{state['requirements']['repository']}"
+                ),
                 task_id=task_id,
                 run_number=state["run_number"],
                 changeset_sha256=_sha256(changeset),
@@ -752,7 +767,15 @@ def build_cio_graph(
                     else "Share the verified CI/CD review with stakeholders."
                 ),
                 expected_impact=(
-                    "Mock adapter: records a proposed pull request. Nothing is pushed or merged."
+                    (
+                        "Creates a new branch with one commit and opens a DRAFT pull request "
+                        "on GitHub. Nothing is merged; existing branches are not touched."
+                    )
+                    if is_change and action.target.startswith("github://")
+                    else (
+                        "Mock adapter: records a proposed pull request. Nothing is pushed or "
+                        "merged."
+                    )
                     if is_change
                     else "Mock adapter: records a published report. No external system is "
                     "contacted."
@@ -813,6 +836,7 @@ def build_cio_graph(
             execution_id=uuid.UUID(state["cio_execution_id"]),
             agent_key=CIO.key,
             allowed_repos=frozenset(state.get("allowed_repos", [])),
+            payload=_action_payload(state),
         )
         action = state["action"]
         outcome = await execute_tool(ctx, action["tool"], action["arguments"])
@@ -1021,6 +1045,34 @@ async def _remember_outcome(session: AsyncSession, task: Task, state: CioState) 
     except KnowledgeError:
         # Memory is best-effort: an unrecordable summary must not undo a verified result.
         return
+
+
+def _action_payload(state: CioState) -> dict[str, Any]:
+    """Content for the approved action; the adapter re-hashes it against the approval."""
+    steps = [PlanStep.model_validate(s) for s in state.get("plan", [])]
+    implement = last_of_kind(steps, "implement")
+    run_tests = last_of_kind(steps, "run_tests")
+    if implement is None or run_tests is None:
+        return {}
+    changeset = state["step_results"][implement.id]
+    qa = state["step_results"][run_tests.id]
+    sandbox = qa.get("sandbox") or {}
+    files = "\n".join(
+        f"- `{f['path']}` ({f['action']})" for f in [*changeset["files"], *changeset["tests"]]
+    )
+    body = "\n\n".join(
+        [
+            changeset["summary"],
+            changeset["rationale"],
+            f"**Files**\n{files}",
+            f"**QA verdict:** {qa['report']['verdict']}: sandbox exit "
+            f"{sandbox.get('exit_code')}, {sandbox.get('summary')}",
+            f"Proposed by Agent HQ (task {state['task_id']}, run {state['run_number']}) after "
+            f"human approval {state.get('approval_id')}. Review before merging; Agent HQ "
+            "never merges.",
+        ]
+    )
+    return {"changeset": changeset, "body": body}
 
 
 def _kind_of(state: CioState, step_id: str) -> str:

@@ -29,16 +29,15 @@ Legend: ✅ allowed · 🔒 allowed only with a matching human approval (ADR-000
 | `github.read_source` (source scope, secrets excluded) | read | ❌ | ❌ | ✅ | ✅ | 2 |
 | `github.list_workflow_runs` | read | ❌ | ✅ allowlisted repo | ❌ | ❌ | 1 |
 | `report.publish_external` (mock adapter) | external_write | 🔒 | ❌ | ❌ | ❌ | 1 (sample approval) |
-| `changeset.propose` (mock PR) | external_write | 🔒 | ❌ | ❌ | ❌ | 2 |
-| `github.create_branch` / `push` | external_write | ❌ | 🔒 | 🔒 | ❌ | 5 |
-| `github.open_pull_request` | external_write | ❌ | 🔒 | 🔒 | ❌ | 5 |
+| `changeset.propose` (mock, or **draft PR via GitHub App** when the project opts in) | external_write | 🔒 | ❌ | ❌ | ❌ | 2 / 5 |
 | `github.merge_protected` | irreversible | ❌ | ❌ | ❌ | ❌ | human only |
 | `sandbox.run_tests` | isolated_execution | ❌ | ❌ | ❌ | ✅ | 2 |
 | `deploy.production` | irreversible | ❌ | 🔒 | ❌ | ❌ | 6 |
 | `knowledge.search` (company + current project, audience, no rejected/archived) | read | ✅ | ✅ | ✅ | ✅ | 3 |
 | `knowledge.propose` (unverified, current project only) | internal_write | ✅ | ✅ | ✅ | ✅ | 3 |
 | knowledge approve / reject / archive / edit | — | ❌ | ❌ | ❌ | ❌ | humans only (API) |
-| `messaging.send_external` | irreversible | 🔒 | ❌ | ❌ | ❌ | 5 |
+| Owner notifications (Slack/Telegram outbox) | system, not an agent tool | — | — | — | — | 5 |
+| `messaging.send_external` (to third parties) | irreversible | 🔒 | ❌ | ❌ | ❌ | later |
 
 ## Cross-cutting rules
 

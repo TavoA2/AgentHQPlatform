@@ -20,10 +20,12 @@ from agent_hq import jobs
 from agent_hq.config import Settings
 from agent_hq.domain import TERMINAL, DomainError, JobKind, TaskCancelledError
 from agent_hq.integrations.github import GitHubClient
+from agent_hq.integrations.github_app import GitHubAppAuth, GitHubPullRequestPublisher
 from agent_hq.integrations.reports import MockReportPublisher
 from agent_hq.llm.base import ModelConfigError
 from agent_hq.llm.router import ModelRouter
 from agent_hq.models import Job, Task
+from agent_hq.notifications import Notifier
 from agent_hq.orchestration.cio import (
     build_cio_graph,
     cancel_executions,
@@ -42,6 +44,14 @@ MAINTENANCE_SECONDS = 10.0
 
 
 def build_runtime(settings: Settings, sessionmaker: Any) -> Runtime:
+    pull_requests = None
+    if settings.github_app_id and settings.github_app_private_key_file:
+        auth = GitHubAppAuth.from_file(
+            settings.github_app_id,
+            settings.github_app_private_key_file,
+            base_url=settings.github_api_url,
+        )
+        pull_requests = GitHubPullRequestPublisher(auth, base_url=settings.github_api_url)
     return Runtime(
         settings=settings,
         sessionmaker=sessionmaker,
@@ -49,6 +59,7 @@ def build_runtime(settings: Settings, sessionmaker: Any) -> Runtime:
         github=GitHubClient(settings.github_token, base_url=settings.github_api_url),
         publisher=MockReportPublisher(),
         sandbox=SandboxClient(settings.sandbox_url, settings.sandbox_token),
+        pull_requests=pull_requests,
     )
 
 
@@ -76,6 +87,7 @@ class Worker:
         self.graph = build_cio_graph(runtime, checkpointer)
         self.worker_id = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"
         self._last_maintenance = 0.0
+        self.notifier = Notifier(runtime.settings)
 
     @property
     def settings(self) -> Settings:
@@ -116,6 +128,7 @@ class Worker:
                 break
             await self.process(job)
             processed += 1
+        await self.deliver_notifications()
         return processed
 
     async def claim(self) -> Job | None:
@@ -142,8 +155,18 @@ class Worker:
                     max_attempts=self.settings.job_max_attempts,
                 )
             await session.commit()
+        await self.deliver_notifications()
         if requeued:
             logger.warning("requeued jobs with expired leases", extra={"job_ids": requeued})
+
+    async def deliver_notifications(self) -> None:
+        try:
+            async with self.runtime.sessionmaker() as session:
+                await self.notifier.deliver_due(session)
+                await session.commit()
+        except Exception:
+            # Delivery problems must never stop the worker from running agents.
+            logger.exception("notification delivery failed")
 
     async def _heartbeat(self, job_id: int) -> None:
         interval = max(1.0, self.settings.job_lease_seconds / 3)

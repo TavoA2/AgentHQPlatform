@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button, Card, ErrorNote, formatTime, inputClass } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
+import { useCanAct } from "@/lib/session";
 import {
   KNOWLEDGE_KINDS,
   type Agent,
@@ -61,6 +62,7 @@ export default function KnowledgePage() {
   const projects = useApi<Project[]>("/projects");
   const agents = useApi<Agent[]>("/agents");
   const projectName = new Map(projects.data?.map((p) => [p.id, p.name]));
+  const canAct = useCanAct();
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,7 +75,7 @@ export default function KnowledgePage() {
             approve it.
           </p>
         </div>
-        <Button onClick={() => { setCreating(true); setSelected(undefined); }}>New entry</Button>
+        {canAct && <Button onClick={() => { setCreating(true); setSelected(undefined); }}>New entry</Button>}
       </div>
 
       <form
@@ -160,6 +162,7 @@ function Detail({
   const doc = useApi<KnowledgeDetail>(`/knowledge/${id}`);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string>();
+  const canAct = useCanAct();
 
   async function review(action: "approve" | "reject" | "archive") {
     setError(undefined);
@@ -214,7 +217,7 @@ function Detail({
       </dl>
       <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded bg-background p-3 text-sm">{d.content}</pre>
       <ErrorNote message={error} />
-      <div className="mt-3 flex flex-wrap justify-end gap-2">
+      <div className={`mt-3 flex-wrap justify-end gap-2 ${canAct ? "flex" : "hidden"}`}>
         {d.trust !== "approved" && <Button onClick={() => review("approve")}>Approve as fact</Button>}
         {d.trust === "unverified" && <Button variant="danger" onClick={() => review("reject")}>Reject</Button>}
         {d.trust !== "archived" && <Button variant="ghost" onClick={() => review("archive")}>Archive</Button>}

@@ -2,9 +2,11 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_hq.config import Settings
+from agent_hq.models import User
 from agent_hq.security.auth import (
     CSRF_HEADER,
     SESSION_COOKIE,
@@ -37,7 +39,17 @@ def check_origin(request: Request, settings: Settings) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "origin not allowed")
 
 
+DEMO_VIEWER_EMAIL = "viewer@demo.agent-hq.local"
+
+
 async def get_principal(request: Request, db: DbDep, settings: SettingsDep) -> Principal:
+    if settings.demo_mode:
+        # Public demo: every visitor is the same read-only viewer (writes are refused by
+        # middleware before reaching any endpoint).
+        viewer = await db.scalar(select(User).where(User.email == DEMO_VIEWER_EMAIL))
+        if viewer is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "demo data not seeded")
+        return Principal(user=viewer, session_id=None, token="demo")  # noqa: S106 - not a secret
     principal = await resolve_session(db, settings, request.cookies.get(SESSION_COOKIE))
     if principal is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "authentication required")

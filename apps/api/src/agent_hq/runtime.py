@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from agent_hq.config import Settings
 from agent_hq.integrations.github import GitHubClient
+from agent_hq.integrations.github_app import GitHubPullRequestPublisher
 from agent_hq.integrations.reports import ReportPublisher
 from agent_hq.llm.router import ModelRouter
 from agent_hq.sandbox.client import SandboxClient
@@ -19,3 +20,5 @@ class Runtime:
     github: GitHubClient
     publisher: ReportPublisher
     sandbox: SandboxClient
+    # Present only when a GitHub App is configured (ADR-0013).
+    pull_requests: GitHubPullRequestPublisher | None = None

@@ -8,6 +8,7 @@ also written to the audit log.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import uuid
@@ -58,6 +59,9 @@ class ToolContext:
     workspace_overlay: dict[str, str] = field(default_factory=dict)
     # Raw sandbox results observed by code, used to validate what the model reports.
     sandbox_results: list[RunResult] = field(default_factory=list)
+    # Content the approved action operates on, supplied by code (never by the model);
+    # adapters re-hash it against the approved parameters before acting.
+    payload: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -270,7 +274,13 @@ async def _publish_report(ctx: ToolContext, args: PublishReportArgs) -> dict[str
     return result
 
 
+def content_sha256(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
 async def _propose_changeset(ctx: ToolContext, args: ProposeChangesetArgs) -> dict[str, Any]:
+    if args.target.startswith("github://"):
+        return await _open_pull_request(ctx, args)
     async with ctx.runtime.sessionmaker() as session:
         result = await ctx.runtime.publisher.propose_changeset(
             session,
@@ -281,6 +291,49 @@ async def _propose_changeset(ctx: ToolContext, args: ProposeChangesetArgs) -> di
         )
         await session.commit()
     return result
+
+
+async def _open_pull_request(ctx: ToolContext, args: ProposeChangesetArgs) -> dict[str, Any]:
+    publisher = ctx.runtime.pull_requests
+    if publisher is None:
+        raise PolicyDenied("GitHub App is not configured; pull requests are disabled")
+    changeset = ctx.payload.get("changeset")
+    # Binding check: only the exact changeset the human approved may be pushed.
+    if changeset is None or content_sha256(changeset) != args.changeset_sha256:
+        raise PolicyDenied("changeset does not match the approved changeset hash")
+    repo = authorize_repository(
+        args.target.removeprefix("github://").removesuffix("/pulls"), ctx.allowed_repos
+    )
+    files = {f["path"]: f["content"] for f in [*changeset["files"], *changeset["tests"]]}
+    for path in files:
+        if is_secret_path(path):
+            raise PolicyDenied(f"refusing to write protected path {path!r}")
+    pr = await publisher.open_draft_pr(
+        repo,
+        branch=f"agent-hq/{args.task_id[:8]}-r{args.run_number}",
+        title=f"[Agent HQ] {changeset['summary']}"[:120],
+        body=str(ctx.payload.get("body", "")),
+        files=files,
+    )
+    async with ctx.runtime.sessionmaker() as session:
+        await record_audit(
+            session,
+            actor_type="agent",
+            actor_id=ctx.agent_key,
+            action="changeset.pull_request_opened",
+            project_id=ctx.project_id,
+            resource_type="task",
+            resource_id=ctx.task_id,
+            details={"repository": repo, "url": pr.url, "branch": pr.branch, "draft": True},
+        )
+        await session.commit()
+    return {
+        "published": True,
+        "location": pr.url,
+        "number": pr.number,
+        "branch": pr.branch,
+        "mock": False,
+    }
 
 
 TOOLS: dict[str, ToolSpec] = {

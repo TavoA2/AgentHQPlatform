@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ApprovalStatusBadge, Button, ErrorNote, formatTime, inputClass } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useCanAct } from "@/lib/session";
 import type { Approval } from "@/lib/types";
 
 /** Shows exactly what is being approved; the decision applies to this action only. */
@@ -12,6 +13,7 @@ export function ApprovalCard({ approval, onDecided }: { approval: Approval; onDe
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const files = approval.evidence.files_inspected ?? [];
+  const canAct = useCanAct();
 
   async function decide(decision: "approve" | "reject") {
     setBusy(true);
@@ -64,7 +66,10 @@ export function ApprovalCard({ approval, onDecided }: { approval: Approval; onDe
         <dt className="text-muted">Expires</dt>
         <dd>{formatTime(approval.expires_at)}</dd>
       </dl>
-      {approval.status === "pending" && (
+      {approval.status === "pending" && !canAct && (
+        <p className="mt-4 text-sm text-muted">Waiting for the owner&apos;s decision.</p>
+      )}
+      {approval.status === "pending" && canAct && (
         <div className="mt-4 flex flex-col gap-2">
           <input
             value={note}

@@ -44,6 +44,10 @@ class ProjectIn(BaseModel):
 
 class GitHubIntegrationIn(BaseModel):
     allowed_repos: list[str] = Field(min_length=1, max_length=50)
+    pull_requests: bool = Field(
+        default=False,
+        description="Allow approved changesets to open draft pull requests (needs a GitHub App)",
+    )
 
     @field_validator("allowed_repos")
     @classmethod

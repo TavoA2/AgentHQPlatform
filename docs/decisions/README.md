@@ -17,3 +17,4 @@ Format: Context → Decision → Consequences. Status is `Accepted`, `Proposed` 
 | [0010](0010-sprint-1-refinements.md) | No token budget, checkpointer setup, initial models | Accepted |
 | [0011](0011-multi-agent-plans-and-sandbox.md) | Multi-agent plans, parallel waves, sandbox runner | Accepted |
 | [0012](0012-the-brain.md) | The Brain: scoped, versioned knowledge with provenance | Accepted |
+| [0013](0013-integrations-and-demo.md) | GitHub App writes, notification outbox, public demo mode | Accepted |

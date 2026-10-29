@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { Button, Card, ErrorNote, inputClass } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
+import { useCanAct } from "@/lib/session";
 import type { Integration, Project, ProjectDetail } from "@/lib/types";
 
 export default function ProjectsPage() {
   const projects = useApi<Project[]>("/projects");
+  const canAct = useCanAct();
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Projects</h1>
-      <NewProject onCreated={projects.reload} />
+      {canAct && <NewProject onCreated={projects.reload} />}
       <ErrorNote message={projects.error} />
       {projects.data?.map((p) => <ProjectRow key={p.id} projectId={p.id} />)}
     </div>
@@ -60,7 +62,10 @@ function ProjectRow({ projectId }: { projectId: string }) {
   const [repos, setRepos] = useState<string>();
   const [error, setError] = useState<string>();
   const [saved, setSaved] = useState(false);
+  const [prs, setPrs] = useState<boolean>();
+  const canAct = useCanAct();
   const current = repos ?? (github?.config.allowed_repos ?? []).join("\n");
+  const pullRequests = prs ?? github?.config.pull_requests === true;
 
   async function save() {
     setError(undefined);
@@ -68,7 +73,7 @@ function ProjectRow({ projectId }: { projectId: string }) {
     try {
       await api(`/projects/${projectId}/integrations/github`, {
         method: "PUT",
-        body: { allowed_repos: current.split(/[\s,]+/).filter(Boolean) },
+        body: { allowed_repos: current.split(/[\s,]+/).filter(Boolean), pull_requests: pullRequests },
       });
       setSaved(true);
       project.reload();
@@ -91,11 +96,28 @@ function ProjectRow({ projectId }: { projectId: string }) {
           onChange={(e) => setRepos(e.target.value)}
           className={`${inputClass} font-mono`}
         />
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={pullRequests}
+            disabled={!canAct}
+            onChange={(e) => setPrs(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            Allow approved changes to open <strong>draft pull requests</strong> on GitHub
+            <span className="block text-xs text-muted">
+              Needs the GitHub App. Each PR still requires your approval; nothing is ever merged.
+            </span>
+          </span>
+        </label>
         <ErrorNote message={error} />
-        <div className="flex items-center justify-end gap-3">
-          {saved && <span className="text-sm text-cyan">Saved</span>}
-          <Button variant="ghost" onClick={save}>Save repositories</Button>
-        </div>
+        {canAct && (
+          <div className="flex items-center justify-end gap-3">
+            {saved && <span className="text-sm text-cyan">Saved</span>}
+            <Button variant="ghost" onClick={save}>Save</Button>
+          </div>
+        )}
       </div>
     </Card>
   );

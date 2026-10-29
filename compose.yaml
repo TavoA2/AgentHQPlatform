@@ -56,6 +56,7 @@ services:
     command: ["agent-hq", "worker"]
     volumes:
       - ./apps/api/src:/app/src:ro
+      - ./secrets:/run/secrets:ro  # GitHub App private key (gitignored)
     depends_on:
       migrate:
         condition: service_completed_successfully

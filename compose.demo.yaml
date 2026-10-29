@@ -1,0 +1,73 @@
+# Public read-only demo (ADR-0013). Completely separate from the private stack: its own
+# database, no worker, no sandbox, no credentials. Run with:
+#   docker compose -f compose.demo.yaml -p agent-hq-demo up --build -d
+# Then open http://localhost:3100
+name: agent-hq-demo
+
+x-demo-backend: &demo-backend
+  build: ./apps/api
+  environment:
+    AGENT_HQ_DEMO_MODE: "true"
+    AGENT_HQ_ENVIRONMENT: production
+    AGENT_HQ_DATABASE_URL: postgresql+psycopg://demo:demo-only@db:5432/agent_hq_demo
+    AGENT_HQ_PUBLIC_URL: ${AGENT_HQ_DEMO_PUBLIC_URL:-http://localhost:3100}
+    AGENT_HQ_BRAND_NAME: ${AGENT_HQ_BRAND_NAME:-Veltrix Labs}
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo-only  # no host port: reachable only inside this network
+      POSTGRES_DB: agent_hq_demo
+    volumes:
+      - demo-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d agent_hq_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    <<: *demo-backend
+    command: ["agent-hq", "migrate"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Runs the real workflows once to produce the demo data, then exits (idempotent).
+  seed:
+    <<: *demo-backend
+    command: ["agent-hq", "seed-demo"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  api:
+    <<: *demo-backend
+    command: ["agent-hq", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        API_INTERNAL_URL: http://api:8000
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      NEXT_PUBLIC_BRAND_NAME: ${AGENT_HQ_BRAND_NAME:-Veltrix Labs}
+    ports:
+      - "127.0.0.1:3100:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  demo-db:

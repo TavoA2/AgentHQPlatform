@@ -34,7 +34,7 @@ export type Integration = {
   id: string;
   provider: string;
   name: string;
-  config: { allowed_repos?: string[] };
+  config: { allowed_repos?: string[]; pull_requests?: boolean };
   secret_ref: string | null;
   scopes: string[];
   enabled: boolean;

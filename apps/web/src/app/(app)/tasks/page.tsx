@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Card, ErrorNote, TaskStatusBadge, formatTime, inputClass } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
+import { useCanAct } from "@/lib/session";
 import { useLiveRefresh } from "@/lib/live-events";
 import { TASK_STATUSES, type Agent, type Project, type Task } from "@/lib/types";
 
@@ -22,11 +23,12 @@ export default function TasksPage() {
   const tasks = useApi<Task[]>(`/tasks?${params}`);
   useLiveRefresh(tasks.reload, (e) => e.type === "status_changed");
   const projectName = new Map(projects.data?.map((p) => [p.id, p.name]));
+  const canAct = useCanAct();
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Tasks</h1>
-      <NewTask projects={projects.data ?? []} />
+      {canAct && <NewTask projects={projects.data ?? []} />}
       <Card
         title="All tasks"
         actions={

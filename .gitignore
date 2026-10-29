@@ -23,3 +23,6 @@ node_modules/
 Thumbs.db
 desktop.ini
 .idea/
+
+# Local secrets (GitHub App private key, ...)
+secrets/

@@ -7,6 +7,7 @@ import { ApprovalCard } from "@/components/approval-card";
 import { ChangesetView, PlanView, QaView } from "@/components/task-results";
 import { Button, Card, ErrorNote, TaskStatusBadge, formatTime } from "@/components/ui";
 import { api, useApi } from "@/lib/api";
+import { useCanAct } from "@/lib/session";
 import { useLiveRefresh, useTaskEventFeed } from "@/lib/live-events";
 import type { TaskDetail, TaskEvent, TaskStatus } from "@/lib/types";
 
@@ -25,6 +26,7 @@ export default function TaskPage() {
   const history = useApi<TaskEvent[]>(`/tasks/${id}/events`);
   const [live, setLive] = useState<TaskEvent[]>([]);
   const [error, setError] = useState<string>();
+  const canAct = useCanAct();
 
   const related = new Set([id, ...(task.data?.subtasks.map((s) => s.id) ?? [])]);
   useLiveRefresh(task.reload, (e) => related.has(e.task_id));
@@ -62,10 +64,10 @@ export default function TaskPage() {
         </div>
         <div className="flex items-center gap-3">
           <TaskStatusBadge status={t.status} />
-          {!t.parent_task_id && STARTABLE.includes(t.status) && (
+          {canAct && !t.parent_task_id && STARTABLE.includes(t.status) && (
             <Button onClick={() => act("start")}>{t.status === "FAILED" ? "Retry" : "Start"}</Button>
           )}
-          {!t.parent_task_id && CANCELLABLE.includes(t.status) && (
+          {canAct && !t.parent_task_id && CANCELLABLE.includes(t.status) && (
             <Button variant="danger" onClick={() => act("cancel")}>Cancel</Button>
           )}
         </div>

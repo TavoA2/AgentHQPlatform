@@ -64,6 +64,8 @@ async def _worker() -> int:
     finally:
         await runtime.github.aclose()
         await runtime.sandbox.aclose()
+        if runtime.pull_requests is not None:
+            await runtime.pull_requests.aclose()
         await engine.dispose()
     return 0
 
@@ -115,6 +117,32 @@ async def _create_admin(email: str, display_name: str) -> int:
     return 0
 
 
+async def _seed_demo() -> int:
+    from agent_hq.db import create_engine, create_sessionmaker
+    from agent_hq.demo import seed_demo
+    from agent_hq.logging import configure_logging
+    from agent_hq.main import validate_settings
+    from agent_hq.orchestration.worker import Worker, open_checkpointer
+    from agent_hq.runtime import Runtime
+
+    settings = get_settings()
+    validate_settings(settings)
+    configure_logging(settings.log_level)
+    engine = create_engine(settings)
+
+    async def run_worker(runtime: Runtime) -> None:
+        async with open_checkpointer(settings) as checkpointer:
+            await Worker(runtime, checkpointer).run_until_idle()
+        await runtime.github.aclose()
+        await runtime.sandbox.aclose()
+
+    try:
+        print(await seed_demo(settings, create_sessionmaker(engine), run_worker))
+    finally:
+        await engine.dispose()
+    return 0
+
+
 async def _verify_audit() -> int:
     from agent_hq.db import create_engine, create_sessionmaker
     from agent_hq.events import verify_audit_chain
@@ -142,6 +170,7 @@ def main() -> None:
     admin.add_argument("--email", required=True)
     admin.add_argument("--name", default="Administrator")
     sub.add_parser("verify-audit", help="verify the audit log hash chain")
+    sub.add_parser("seed-demo", help="fill a demo-mode database by running real workflows")
     sandbox = sub.add_parser("sandbox", help="run the sandbox runner (needs Docker access)")
     sandbox.add_argument("--host", default="127.0.0.1")
     sandbox.add_argument("--port", type=int, default=8080)
@@ -174,6 +203,8 @@ def main() -> None:
         code = migrate()
     elif args.command == "worker":
         code = _run(_worker())
+    elif args.command == "seed-demo":
+        code = _run(_seed_demo())
     elif args.command == "create-admin":
         code = _run(_create_admin(args.email, args.name))
     else:

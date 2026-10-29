@@ -50,6 +50,19 @@ class Settings(BaseSettings):
     github_token: SecretStr | None = None
     github_api_url: str = "https://api.github.com"
 
+    # --- GitHub App for writes (ADR-0013); the private key is a mounted file ---
+    github_app_id: str | None = None
+    github_app_private_key_file: str | None = None
+
+    # --- Notifications (ADR-0013); secrets only ever come from the environment ---
+    public_url: str = "http://localhost:3000"
+    slack_webhook_url: SecretStr | None = None
+    telegram_bot_token: SecretStr | None = None
+    telegram_chat_id: str | None = None
+
+    # --- Public read-only demo (ADR-0013) ---
+    demo_mode: bool = False
+
     # --- Sandbox runner (ADR-0011) ---
     sandbox_url: str = "http://sandbox:8080"
     sandbox_token: SecretStr = SecretStr("")

@@ -85,7 +85,10 @@ async def set_github_integration(
             scopes=["contents:read", "metadata:read", "actions:read"],
         )
         db.add(integration)
-    integration.config = {"allowed_repos": body.allowed_repos}
+    integration.config = {"allowed_repos": body.allowed_repos, "pull_requests": body.pull_requests}
+    integration.scopes = ["contents:read", "metadata:read", "actions:read"] + (
+        ["contents:write", "pull_requests:write"] if body.pull_requests else []
+    )
     await db.flush()
     await record_audit(
         db,
@@ -95,7 +98,7 @@ async def set_github_integration(
         project_id=project.id,
         resource_type="integration",
         resource_id=integration.id,
-        details={"allowed_repos": body.allowed_repos},
+        details={"allowed_repos": body.allowed_repos, "pull_requests": body.pull_requests},
     )
     await db.commit()
     return IntegrationOut.model_validate(integration)
