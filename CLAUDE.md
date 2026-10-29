@@ -6,10 +6,9 @@ Read [docs/product-brief.md](docs/product-brief.md) first. Architecture lives in
 ## Working rules
 
 - Work sprint by sprint. Do not start the next sprint without explicit approval from the
-  owner. Current sprint: **Sprint 6 complete (pending owner review). All planned sprints done;**
-  **next work needs owner approval.**
-  The CIO agent is presented as "Dixon". A conversational, JARVIS-style assistant (chat,
-  proactive alerts, voice, WhatsApp) is deferred by the owner to a later sprint.
+  owner. Current sprint: **Sprint 7 complete (pending owner review); next work needs approval.**
+  The CIO agent is presented as "Dixon". Sprint 7 added the dashboard chat with Dixon
+  (ADR-0015); proactive alerts, voice and WhatsApp remain deferred.
 - A change that contradicts an ADR needs a new ADR that supersedes it, not a silent
   deviation.
 - Security is enforced in code (policy engine, approvals, project scoping), never only in

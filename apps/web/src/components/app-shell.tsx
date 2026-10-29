@@ -11,6 +11,7 @@ import type { Approval, Session } from "@/lib/types";
 
 const NAV = [
   { href: "/", label: "Office" },
+  { href: "/chat", label: "Dixon" },
   { href: "/tasks", label: "Tasks" },
   { href: "/approvals", label: "Approvals" },
   { href: "/knowledge", label: "Brain" },

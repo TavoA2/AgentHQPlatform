@@ -67,6 +67,7 @@ class RiskLevel(StrEnum):
 class JobKind(StrEnum):
     START = "start"
     RESUME = "resume"
+    CHAT = "chat"  # answer a chat message (ADR-0015)
 
 
 class JobStatus(StrEnum):

@@ -91,7 +91,15 @@ created_at`
 The app's DB role has `INSERT, SELECT` only.
 
 ### jobs
-See ADR-0003.
+See ADR-0003. A job targets exactly one of `task_id` (agent work) or `conversation_id`
+(a chat reply, kind `chat`, ADR-0015).
+
+### conversations / conversation_messages (Sprint 7, ADR-0015)
+`conversations`: `id, user_id, project_id (nullable = company-wide, fixed), title,
+created_at, updated_at`. `conversation_messages`: `id bigint identity, conversation_id,
+role ('user'|'assistant'), content, status ('pending'|'complete'|'failed'), tool_calls
+(jsonb), proposals (jsonb: task proposals and, once accepted, the task id), error,
+model_provider, model_name, tokens_in, tokens_out, cost_usd, created_at, completed_at`.
 
 ## Task status machine
 

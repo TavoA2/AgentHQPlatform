@@ -3,7 +3,7 @@
 Source of truth is the lockfiles (`apps/api/uv.lock`, `apps/web/package-lock.json`).
 This table records the direct dependencies as resolved and verified together.
 
-Last verified: 2026-10-28 (Sprint 6) — lint, typecheck, 184 backend tests against
+Last verified: 2026-10-28 (Sprint 7) — lint, typecheck, 189 backend tests against
 PostgreSQL 17 (including the real Docker sandbox test), web build and the full Docker
 Compose stack passing. Sandbox image: python:3.13-slim + pytest 9.2.0.
 

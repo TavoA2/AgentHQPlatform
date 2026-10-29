@@ -1,13 +1,16 @@
-"""Task status transitions: the only code path that changes `tasks.status`."""
+"""Task creation and status transitions: the only code path that changes `tasks.status`."""
 
 import uuid
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_hq.domain import TaskStatus, check_transition
+from agent_hq.agents import CIO
+from agent_hq.domain import JobKind, TaskStatus, check_transition
 from agent_hq.events import ActorType, record_audit, record_task_event
-from agent_hq.models import Task, utcnow
+from agent_hq.jobs import enqueue
+from agent_hq.models import Agent, Task, utcnow
 from agent_hq.notifications import enqueue_for_transition
 
 
@@ -68,3 +71,63 @@ async def transition(
         details=payload,
     )
     return True
+
+
+async def create_task(
+    session: AsyncSession,
+    *,
+    project_id: uuid.UUID,
+    title: str,
+    request: str,
+    acceptance_criteria: list[str],
+    created_by: uuid.UUID,
+    options: dict[str, Any] | None = None,
+    audit_details: dict[str, Any] | None = None,
+) -> Task:
+    """Create a DRAFT task assigned to the CIO. Callers check that the project exists."""
+    cio_id = await session.scalar(select(Agent.id).where(Agent.key == CIO.key))
+    task = Task(
+        project_id=project_id,
+        title=title,
+        request=request,
+        status=TaskStatus.DRAFT,
+        assigned_agent_id=cio_id,
+        created_by=created_by,
+        acceptance_criteria=acceptance_criteria,
+        options=options or {},
+    )
+    session.add(task)
+    await session.flush()
+    await record_audit(
+        session,
+        actor_type="user",
+        actor_id=str(created_by),
+        action="task.created",
+        project_id=task.project_id,
+        resource_type="task",
+        resource_id=task.id,
+        details={"title": task.title, **(audit_details or {})},
+    )
+    return task
+
+
+async def start_task(
+    session: AsyncSession, task: Task, *, actor_id: str, max_attempts: int
+) -> None:
+    """Queue a new run of a startable top-level task (the caller holds a row lock)."""
+    task.run_number += 1
+    await transition(
+        session,
+        task,
+        TaskStatus.QUEUED,
+        actor_type="user",
+        actor_id=actor_id,
+        extra={"run_number": task.run_number},
+    )
+    await enqueue(
+        session,
+        kind=JobKind.START,
+        task_id=task.id,
+        payload={"run_number": task.run_number},
+        max_attempts=max_attempts,
+    )

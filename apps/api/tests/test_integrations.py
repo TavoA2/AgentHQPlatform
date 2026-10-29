@@ -282,7 +282,14 @@ async def test_demo_seed_and_read_only_access(harness: Harness) -> None:
         ]  # fmt: skip
         assert len((await visitor.get("/knowledge")).json()) >= 4
         approval = (await visitor.get("/approvals", params={"status": "pending"})).json()[0]
+        [conversation] = (await visitor.get("/conversations")).json()
+        chat = (await visitor.get(f"/conversations/{conversation['id']}")).json()
+        assert [m["status"] for m in chat["messages"]] == ["complete"] * 4
+        assert "Pending approvals:" in chat["messages"][1]["content"]
+        assert "QA Engineer" in chat["messages"][1]["content"]
+        assert chat["messages"][3]["proposals"][0]["project_key"] == "acme-shop"
         for method, path in [
+            ("POST", f"/conversations/{conversation['id']}/messages"),
             ("POST", f"/approvals/{approval['id']}/approve"),
             ("POST", "/projects"),
             ("POST", "/auth/login"),

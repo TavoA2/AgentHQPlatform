@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from agent_hq.agents import CIO, seed_agents
 from agent_hq.api.deps import DEMO_VIEWER_EMAIL
+from agent_hq.chat import DEFAULT_TITLE, post_message
 from agent_hq.config import Settings
 from agent_hq.domain import ApprovalStatus, JobKind, KnowledgeScope, TaskStatus
 from agent_hq.integrations.github import GitHubClient
@@ -26,7 +27,15 @@ from agent_hq.integrations.reports import MockReportPublisher
 from agent_hq.jobs import enqueue
 from agent_hq.knowledge import create_document
 from agent_hq.llm.router import ModelRouter
-from agent_hq.models import Agent, ApprovalRequest, Integration, Project, Task, User
+from agent_hq.models import (
+    Agent,
+    ApprovalRequest,
+    Conversation,
+    Integration,
+    Project,
+    Task,
+    User,
+)
 from agent_hq.orchestration.mock_model import default_mock_responder
 from agent_hq.runtime import Runtime
 from agent_hq.sandbox.client import SandboxClient
@@ -36,6 +45,10 @@ from agent_hq.security.approvals import decide
 from agent_hq.tasks import transition
 
 DEMO_OWNER_EMAIL = "owner@demo.agent-hq.local"
+DEMO_QUESTIONS = (
+    "Who is on the team, and what is waiting for my approval?",
+    "Review the CI/CD pipeline of Acme Shop before Tuesday's release.",
+)
 UNUSABLE_PASSWORD = "!"  # noqa: S105 - not an Argon2 hash: nobody can log in as it
 
 SAMPLE_REPOS: dict[str, dict[str, str]] = {
@@ -306,4 +319,22 @@ async def seed_demo(
             )
         await session.commit()
     await run_worker(demo_runtime(settings, sessionmaker))
+
+    # A real chat with Dixon (mock model, real tools) for the read-only viewer (ADR-0015).
+    async with sessionmaker() as session:
+        viewer_id = await session.scalar(select(User.id).where(User.email == DEMO_VIEWER_EMAIL))
+        if viewer_id is None:
+            raise RuntimeError("demo viewer missing")
+        conversation = Conversation(user_id=viewer_id, title=DEFAULT_TITLE)
+        session.add(conversation)
+        await session.commit()
+        conversation_id = conversation.id
+    for question in DEMO_QUESTIONS:
+        async with sessionmaker() as session:
+            current = await session.get(Conversation, conversation_id)
+            if current is None:
+                raise RuntimeError("demo conversation missing")
+            await post_message(session, current, question, max_attempts=1)
+            await session.commit()
+        await run_worker(demo_runtime(settings, sessionmaker))
     return "demo data seeded"

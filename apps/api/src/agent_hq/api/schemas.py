@@ -203,3 +203,48 @@ class AgentOut(BaseModel):
     current_task_id: uuid.UUID | None
     last_execution: ExecutionOut | None
     allowed_tools: list[str]
+
+
+# --- chat with Dixon (ADR-0015) ---
+class ConversationIn(BaseModel):
+    project_id: uuid.UUID | None = Field(
+        default=None, description="Bind the conversation to one project; omit for company-wide"
+    )
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class ConversationOut(Out):
+    id: uuid.UUID
+    project_id: uuid.UUID | None
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatMessageIn(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ChatMessageOut(Out):
+    id: int
+    role: str
+    content: str
+    status: str
+    tool_calls: list[dict[str, Any]]
+    proposals: list[dict[str, Any]]
+    error: str | None
+    model_provider: str | None
+    model_name: str | None
+    tokens_in: int
+    tokens_out: int
+    cost_usd: Decimal | None
+    created_at: datetime
+    completed_at: datetime | None
+
+
+class ConversationDetailOut(ConversationOut):
+    messages: list[ChatMessageOut]
+
+
+class AcceptProposalIn(BaseModel):
+    start: bool = Field(default=False, description="Also start the task right away")

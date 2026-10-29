@@ -82,7 +82,12 @@ export default function OperationsPage() {
                 {m.recent_failed_jobs.map((j) => (
                   <li key={j.id} className="font-mono text-xs">
                     #{j.id} {j.kind} ·{" "}
-                    <Link href={`/tasks/${j.task_id}`} className="text-cyan">task</Link> · {j.attempts}{" "}
+                    {j.task_id ? (
+                      <Link href={`/tasks/${j.task_id}`} className="text-cyan">task</Link>
+                    ) : (
+                      "chat"
+                    )}{" "}
+                    · {j.attempts}{" "}
                     attempts · {formatTime(j.updated_at)}
                     <span className="block text-muted">{j.last_error}</span>
                   </li>

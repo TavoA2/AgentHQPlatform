@@ -4,7 +4,6 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import exists, select, update
 
-from agent_hq.agents import CIO
 from agent_hq.api.deps import DbDep, PrincipalDep, SettingsDep
 from agent_hq.api.schemas import (
     EventOut,
@@ -14,9 +13,7 @@ from agent_hq.api.schemas import (
     approval_out,
     execution_out,
 )
-from agent_hq.domain import CANCELLABLE, STARTABLE, JobKind, JobStatus, TaskStatus
-from agent_hq.events import record_audit
-from agent_hq.jobs import enqueue
+from agent_hq.domain import CANCELLABLE, STARTABLE, JobStatus, TaskStatus
 from agent_hq.models import (
     Agent,
     ApprovalRequest,
@@ -27,6 +24,8 @@ from agent_hq.models import (
     TaskExecution,
 )
 from agent_hq.security.approvals import cancel_open_for_task
+from agent_hq.tasks import create_task as new_task
+from agent_hq.tasks import start_task as queue_run
 from agent_hq.tasks import transition
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -81,28 +80,14 @@ async def list_tasks(
 async def create_task(body: TaskIn, principal: PrincipalDep, db: DbDep) -> TaskOut:
     if await db.get(Project, body.project_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
-    cio_id = await db.scalar(select(Agent.id).where(Agent.key == CIO.key))
-    task = Task(
+    task = await new_task(
+        db,
         project_id=body.project_id,
         title=body.title,
         request=body.request,
-        status=TaskStatus.DRAFT,
-        assigned_agent_id=cio_id,
-        created_by=principal.user.id,
         acceptance_criteria=body.acceptance_criteria,
+        created_by=principal.user.id,
         options={"model_override": body.model_override} if body.model_override else {},
-    )
-    db.add(task)
-    await db.flush()
-    await record_audit(
-        db,
-        actor_type="user",
-        actor_id=str(principal.user.id),
-        action="task.created",
-        project_id=task.project_id,
-        resource_type="task",
-        resource_id=task.id,
-        details={"title": task.title},
     )
     await db.commit()
     return _task_out(task, await _agent_keys(db))
@@ -166,21 +151,8 @@ async def start_task(
         raise HTTPException(status.HTTP_409_CONFLICT, "subtasks are run by their parent task")
     if task.status not in STARTABLE:
         raise HTTPException(status.HTTP_409_CONFLICT, f"task cannot be started from {task.status}")
-    task.run_number += 1
-    await transition(
-        db,
-        task,
-        TaskStatus.QUEUED,
-        actor_type="user",
-        actor_id=str(principal.user.id),
-        extra={"run_number": task.run_number},
-    )
-    await enqueue(
-        db,
-        kind=JobKind.START,
-        task_id=task.id,
-        payload={"run_number": task.run_number},
-        max_attempts=settings.job_max_attempts,
+    await queue_run(
+        db, task, actor_id=str(principal.user.id), max_attempts=settings.job_max_attempts
     )
     await db.commit()
     return _task_out(task, await _agent_keys(db))

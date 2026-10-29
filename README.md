@@ -4,7 +4,9 @@ Internal AI virtual operations platform for **Veltrix Labs** (provisional brand)
 administrator supervises specialized AI agents that plan, execute and report real work,
 with human approval for sensitive actions.
 
-> Status: **all six planned sprints delivered.** Dixon (the AI CIO, LangGraph) routes each
+> Status: **seven sprints delivered.** You can chat with Dixon in the dashboard: answers come
+> from real tasks, approvals, agents and The Brain, and new work is proposed for you to
+> confirm (Sprint 7). Dixon (the AI CIO, LangGraph) routes each
 > request to a workflow and delegates it as visible subtasks: a DevOps agent reviews CI/CD,
 > or a Software Engineer and a QA agent work in parallel on a change that QA tests in an
 > isolated Docker sandbox. Results are verified by code against evidence, a human approves
@@ -39,6 +41,7 @@ apps/
       security/       auth, approvals, policy engine
       integrations/   GitHub (read-only), report publisher (mock)
       tools.py        tool registry + the single, policy-checked execution path
+      chat.py         chat with Dixon; chat_tools.py holds its read-only tools
       models.py       ORM models · migrations/ holds Alembic revisions
   web/          Next.js 16 (App Router) · TypeScript · Tailwind CSS v4
   sandbox-images/ images for sandboxed test runs (python: stdlib + pytest)
@@ -67,7 +70,8 @@ Open http://localhost:3000, sign in, then:
    - "Implement a slugify helper in owner/name with tests." (Software Engineer + QA)
 3. Watch the office, the plan and the event log update live; approve in **Approvals**;
    read the verified result (findings, or changeset + QA sandbox run) on the task page.
-   **Operations** shows queue, failures and per-agent usage. **Brain** holds company and
+   **Dixon** is a chat with the CIO: ask what is going on or ask for work and confirm
+   the proposal card. **Operations** shows queue, failures and per-agent usage. **Brain** holds company and
    project knowledge: add your services and policies there; Dixon uses them when planning.
 
 Without `OPENAI_API_KEY` and model profiles the deterministic **mock** provider is used
@@ -85,7 +89,7 @@ Full setup, host-based development and verification commands:
 - Acceptance and evidence: [Sprint 1](docs/sprints/sprint-1-acceptance.md) ·
   [Sprint 2](docs/sprints/sprint-2-acceptance.md) · [Sprint 3](docs/sprints/sprint-3-acceptance.md) ·
   [Sprint 4](docs/sprints/sprint-4-acceptance.md) · [Sprint 5](docs/sprints/sprint-5-acceptance.md) ·
-  [Sprint 6](docs/sprints/sprint-6-acceptance.md)
+  [Sprint 6](docs/sprints/sprint-6-acceptance.md) · [Sprint 7](docs/sprints/sprint-7-acceptance.md)
 - Runbooks: [First deployment](docs/runbooks/first-deployment.md) · [Operations](docs/runbooks/operations.md)
 - Guides: [GitHub App](docs/guides/github-app.md) · [Notifications](docs/guides/notifications.md) ·
   [Public demo](docs/guides/public-demo.md)

@@ -39,6 +39,20 @@ Legend: ✅ allowed · 🔒 allowed only with a matching human approval (ADR-000
 | Owner notifications (Slack/Telegram outbox) | system, not an agent tool | — | — | — | — | 5 |
 | `messaging.send_external` (to third parties) | irreversible | 🔒 | ❌ | ❌ | ❌ | later |
 
+## Dixon in chat (Sprint 7, ADR-0015)
+
+Separate registry (`chat_tools.py`): the chat runs as the CIO's conversational surface and
+can use **only** these tools. Anything else — including every agent tool above — is denied
+as an unknown tool and audited (`chat.tool_denied`).
+
+| Tool | Class | Scope enforced in code |
+|---|---|---|
+| `chat.overview`, `chat.list_tasks`, `chat.get_task` | read | company-wide: all projects; project chat: that project only |
+| `chat.list_approvals` | read | same; **no decide tool exists** |
+| `chat.team` | read | agent registry + statuses derived from real executions |
+| `chat.search_knowledge` | read | company-wide: company knowledge only; project chat: + that project |
+| `chat.propose_task` | none (proposal) | project in scope; the owner's click creates the task through the normal API |
+
 ## Cross-cutting rules
 
 1. **Project scope:** the project of the running task is injected by the runtime; tools

@@ -23,6 +23,7 @@ from agent_hq.config import Settings
 
 API_ROOT = Path(__file__).resolve().parents[1]
 APP_TABLES = (
+    "conversation_messages, conversations, "
     "notifications, knowledge_document_versions, knowledge_documents, audit_events, "
     "task_events, "
     "approval_requests, jobs, task_executions, tasks, "

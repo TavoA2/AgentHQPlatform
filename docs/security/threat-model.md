@@ -44,9 +44,10 @@ of every sprint that adds a tool, integration or agent.
 | T17 | Public demo abused to act or leak data | Separate deployment and database; refuses to start with credentials; all writes rejected before routing; mock model only. |
 | T19 | Exposed admin surface on the internet | HTTPS only (HSTS), mandatory TOTP 2FA in production, single-use codes, login throttling, no SSH (SSM only), only ports 80/443 open, IMDSv2 with hop limit 1 so containers cannot read instance credentials. |
 | T18 | Chat channel spoofing an approval | Notifications are outbound only; approvals require the authenticated dashboard. |
+| T20 | Chat used as a side door (prompt injection makes Dixon act, or reach another project's data) | Chat tools are read-only plus proposals; tasks are created only by the owner's authenticated, CSRF-checked confirmation, once per proposal. No approve/start/cancel/publish tool exists. Conversation scope is fixed at creation and applied in SQL. Tool output is wrapped as untrusted. Denied calls are audited. Credentials pasted in chat are redacted before storage and before reaching a model (ADR-0015). |
 | T14 | Docker socket abuse via the sandbox service (socket = host root) | Minimal API (one operation, fixed templates), bearer token, internal network only, input size/path validation. Planned: gVisor runtime and rootless Docker for cloud (Sprint 6). |
 
-## Residual risks (as of Sprint 6)
+## Residual risks (as of Sprint 7)
 
 - ~~Password-only admin~~ → TOTP 2FA, mandatory in production (Sprint 6).
 - ~~PAT for writes~~ → GitHub App for writes (Sprint 5); a read-only PAT may still be used for reads.
@@ -55,3 +56,5 @@ of every sprint that adds a tool, integration or agent.
 - Secrets in a root-only file on the instance rather than a secrets manager.
 - The sandbox service holds the Docker socket (gVisor/rootless Docker not yet applied).
 - Login throttling is in-memory (single API process).
+- A company-wide chat sends task metadata of several projects to the same model provider
+  in one context (the owner's own view); project knowledge stays in project chats.

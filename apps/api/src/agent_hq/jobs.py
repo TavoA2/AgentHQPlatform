@@ -15,13 +15,15 @@ async def enqueue(
     session: AsyncSession,
     *,
     kind: JobKind,
-    task_id: uuid.UUID,
+    task_id: uuid.UUID | None = None,
+    conversation_id: uuid.UUID | None = None,
     payload: dict[str, Any] | None = None,
     max_attempts: int = 3,
 ) -> Job:
     job = Job(
         kind=kind,
         task_id=task_id,
+        conversation_id=conversation_id,
         payload=payload or {},
         status=JobStatus.QUEUED,
         max_attempts=max_attempts,

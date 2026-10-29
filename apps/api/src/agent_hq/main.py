@@ -13,6 +13,7 @@ from agent_hq.api import (
     agents,
     approvals,
     auth,
+    chat,
     events,
     health,
     knowledge,
@@ -79,7 +80,18 @@ def create_app(settings: Settings | None = None, *, start_background: bool = Tru
         docs_url=None if settings.environment == "production" else "/docs",
         redoc_url=None,
     )
-    for module in (health, auth, projects, tasks, agents, approvals, events, metrics, knowledge):
+    for module in (
+        health,
+        auth,
+        projects,
+        tasks,
+        agents,
+        approvals,
+        events,
+        metrics,
+        knowledge,
+        chat,
+    ):
         app.include_router(module.router)
 
     @app.middleware("http")

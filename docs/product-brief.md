@@ -46,7 +46,8 @@ Sales, Support) that do real work for a boutique IT consultancy.
 | 4 | Interactive 3D isometric office + accessible 2D fallback |
 | 5 | External integrations (GitHub write, Actions, Telegram, Slack, Drive, MCP) |
 | 6 | Cloud deployment (AWS), observability, backups, runbooks, cost monitoring |
-| later | Conversational assistant ("JARVIS"-style): chat with Dixon, proactive alerts, voice, WhatsApp |
+| 7 | Chat with Dixon in the dashboard: grounded answers over real data, task proposals the owner confirms (ADR-0015) |
+| later | Rest of the JARVIS-style assistant: proactive alerts, voice, WhatsApp |
 
 Sprint 1 use case: *"Analyze an authorized GitHub repository and propose improvements to
 its CI/CD pipeline."* Read-only repository access.

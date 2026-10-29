@@ -276,7 +276,11 @@ class Job(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     kind: Mapped[JobKind] = mapped_column(_enum(JobKind, "job_kind"))
-    task_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
+    # Exactly one of task_id (agent work) or conversation_id (chat reply, ADR-0015).
+    task_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE")
+    )
     payload: Mapped[dict[str, Any]] = mapped_column(default=dict)
     status: Mapped[JobStatus] = mapped_column(_enum(JobStatus, "job_status"))
     attempts: Mapped[int] = mapped_column(Integer, default=0)
@@ -288,7 +292,10 @@ class Job(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
-    __table_args__ = (Index("ix_jobs_status_run_after", "status", "run_after"),)
+    __table_args__ = (
+        Index("ix_jobs_status_run_after", "status", "run_after"),
+        CheckConstraint("(task_id IS NULL) <> (conversation_id IS NULL)", name="one_target"),
+    )
 
 
 class KnowledgeDocument(Base):
@@ -388,4 +395,51 @@ class Notification(Base):
     __table_args__ = (
         CheckConstraint("status IN ('pending', 'sent', 'skipped', 'failed')", name="status"),
         Index("ix_notifications_pending", "status", "run_after"),
+    )
+
+
+class Conversation(Base):
+    """A chat with Dixon (ADR-0015). The scope (company-wide or one project) is fixed."""
+
+    __tablename__ = "conversations"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE")
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    __table_args__ = (Index("ix_conversations_user_updated", "user_id", "updated_at"),)
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE")
+    )
+    role: Mapped[str] = mapped_column(String(16))
+    content: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(16), default="complete")
+    # Tools the reply used ({name, arguments, ok, error}) and task proposals awaiting the
+    # owner's confirmation ({id, project_id, title, request, ..., task_id once accepted}).
+    tool_calls: Mapped[list[Any]] = mapped_column(default=list)
+    proposals: Mapped[list[Any]] = mapped_column(default=list)
+    error: Mapped[str | None] = mapped_column(Text)
+    model_provider: Mapped[str | None] = mapped_column(String(32))
+    model_name: Mapped[str | None] = mapped_column(String(120))
+    tokens_in: Mapped[int] = mapped_column(BigInteger, default=0)
+    tokens_out: Mapped[int] = mapped_column(BigInteger, default=0)
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    completed_at: Mapped[datetime | None]
+
+    __table_args__ = (
+        CheckConstraint("role IN ('user', 'assistant')", name="role"),
+        CheckConstraint("status IN ('pending', 'complete', 'failed')", name="status"),
+        Index("ix_conversation_messages_conversation", "conversation_id", "id"),
     )

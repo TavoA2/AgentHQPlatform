@@ -28,7 +28,7 @@ class AgentUsage(BaseModel):
 
 class FailedJob(BaseModel):
     id: int
-    task_id: str
+    task_id: str | None
     kind: str
     attempts: int
     last_error: str | None
@@ -99,7 +99,7 @@ async def summary(_: PrincipalDep, db: DbDep) -> MetricsSummary:
         recent_failed_jobs=[
             FailedJob(
                 id=j.id,
-                task_id=str(j.task_id),
+                task_id=str(j.task_id) if j.task_id else None,
                 kind=j.kind.value,
                 attempts=j.attempts,
                 last_error=(j.last_error or "")[:300] or None,

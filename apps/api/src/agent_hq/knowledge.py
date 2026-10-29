@@ -270,6 +270,28 @@ async def agent_search(
     return await _search(session, query, tsquery=tsquery, limit=limit)
 
 
+async def chat_search(
+    session: AsyncSession, *, project_id: uuid.UUID | None, text: str, limit: int = 5
+) -> list[KnowledgeHit]:
+    """Retrieval for Dixon in chat (ADR-0015): a company-wide conversation sees company
+    knowledge only; a project conversation also sees that project's knowledge."""
+    words = _any_word_query(text)
+    tsquery = func.to_tsquery("simple", words) if words else None
+    if project_id is not None:
+        visibility = agent_visibility(project_id, "cio")
+    else:
+        visibility = and_(
+            KnowledgeDocument.scope == KnowledgeScope.COMPANY,
+            KnowledgeDocument.trust.in_([KnowledgeTrust.APPROVED, KnowledgeTrust.UNVERIFIED]),
+            or_(
+                func.cardinality(KnowledgeDocument.audience) == 0,
+                KnowledgeDocument.audience.contains(["cio"]),
+            ),
+        )
+    query = select(KnowledgeDocument).where(visibility)
+    return await _search(session, query, tsquery=tsquery, limit=limit)
+
+
 async def human_search(
     session: AsyncSession,
     *,

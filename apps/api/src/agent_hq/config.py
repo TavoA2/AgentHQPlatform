@@ -42,6 +42,10 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("AGENT_HQ_OPENAI_API_KEY", "OPENAI_API_KEY"),
     )
 
+    # --- Chat with Dixon (ADR-0015); override the model with model_overrides["cio_chat"] ---
+    chat_model_profile: Literal["reasoning", "fast"] = "fast"
+    chat_history_messages: int = 20
+
     # --- Loop guards (not budgets; ADR-0010) ---
     agent_max_steps: int = 12
     graph_recursion_limit: int = 50

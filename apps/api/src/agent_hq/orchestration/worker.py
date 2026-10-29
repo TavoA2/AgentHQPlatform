@@ -17,6 +17,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from agent_hq import jobs
+from agent_hq.chat import fail_turn, run_turn
 from agent_hq.config import Settings
 from agent_hq.domain import TERMINAL, DomainError, JobKind, TaskCancelledError
 from agent_hq.integrations.github import GitHubClient
@@ -177,28 +178,38 @@ class Worker:
                 await session.commit()
 
     async def process(self, job: Job) -> None:
-        log = {"job_id": job.id, "task_id": str(job.task_id), "kind": job.kind.value}
-        logger.info("job started", extra=log)
         heartbeat = asyncio.create_task(self._heartbeat(job.id))
         try:
-            await self._run_graph(job)
+            if job.task_id is not None:
+                await self._process_task(job, job.task_id)
+            else:
+                await self._process_chat(job)
+        finally:
+            heartbeat.cancel()
+            await asyncio.gather(heartbeat, return_exceptions=True)
+
+    async def _process_task(self, job: Job, task_id: uuid.UUID) -> None:
+        log = {"job_id": job.id, "task_id": str(task_id), "kind": job.kind.value}
+        logger.info("job started", extra=log)
+        try:
+            await self._run_graph(job, task_id)
         except TaskCancelledError:
             async with self.runtime.sessionmaker() as session:
-                await cancel_executions(session, job.task_id)
+                await cancel_executions(session, task_id)
                 await jobs.complete(session, job.id)
                 await session.commit()
             logger.info("job stopped: task cancelled", extra=log)
         except GraphRecursionError:
-            await self._fail(job, "max_steps_exceeded", "graph recursion limit reached")
+            await self._fail(job, task_id, "max_steps_exceeded", "graph recursion limit reached")
         except (DomainError, ModelConfigError) as exc:
-            await self._fail(job, type(exc).__name__, str(exc))
+            await self._fail(job, task_id, type(exc).__name__, str(exc))
         except Exception as exc:
             logger.exception("job failed", extra=log)
             async with self.runtime.sessionmaker() as session:
                 requeued = await jobs.fail(session, job.id, error=repr(exc), retry=True)
                 if not requeued:
                     await fail_task_outside_graph(
-                        session, job.task_id, reason="worker_error", detail=repr(exc)[:500]
+                        session, task_id, reason="worker_error", detail=repr(exc)[:500]
                     )
                 await session.commit()
         else:
@@ -206,19 +217,39 @@ class Worker:
                 await jobs.complete(session, job.id)
                 await session.commit()
             logger.info("job finished", extra=log)
-        finally:
-            heartbeat.cancel()
-            await asyncio.gather(heartbeat, return_exceptions=True)
 
-    async def _fail(self, job: Job, reason: str, detail: str) -> None:
+    async def _process_chat(self, job: Job) -> None:
+        """Answer a chat message (ADR-0015). Configuration errors are not retried."""
+        message_id = int(job.payload["message_id"])
+        log = {"job_id": job.id, "conversation_id": str(job.conversation_id)}
+        try:
+            await run_turn(self.runtime, message_id)
+        except (DomainError, ModelConfigError) as exc:
+            await fail_turn(self.runtime, message_id, str(exc))
+            async with self.runtime.sessionmaker() as session:
+                await jobs.fail(session, job.id, error=str(exc), retry=False)
+                await session.commit()
+        except Exception as exc:
+            logger.exception("chat job failed", extra=log)
+            async with self.runtime.sessionmaker() as session:
+                requeued = await jobs.fail(session, job.id, error=repr(exc), retry=True)
+                await session.commit()
+            if not requeued:
+                await fail_turn(self.runtime, message_id, "Dixon could not answer; try again")
+        else:
+            async with self.runtime.sessionmaker() as session:
+                await jobs.complete(session, job.id)
+                await session.commit()
+
+    async def _fail(self, job: Job, task_id: uuid.UUID, reason: str, detail: str) -> None:
         async with self.runtime.sessionmaker() as session:
             await jobs.fail(session, job.id, error=f"{reason}: {detail}", retry=False)
-            await fail_task_outside_graph(session, job.task_id, reason=reason, detail=detail)
+            await fail_task_outside_graph(session, task_id, reason=reason, detail=detail)
             await session.commit()
 
-    async def _run_graph(self, job: Job) -> None:
+    async def _run_graph(self, job: Job, task_id: uuid.UUID) -> None:
         async with self.runtime.sessionmaker() as session:
-            task = await session.get(Task, job.task_id)
+            task = await session.get(Task, task_id)
         if task is None or task.status in TERMINAL:
             return
         config: Any = {

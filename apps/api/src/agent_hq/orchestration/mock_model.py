@@ -220,6 +220,10 @@ def _qa(request: ModelRequest) -> ModelResponse:
 
 
 def default_mock_responder(request: ModelRequest) -> ModelResponse | None:
+    if request.purpose == "cio.chat":
+        from agent_hq.orchestration.mock_chat import respond_chat
+
+        return respond_chat(request)
     if request.purpose == "cio.analyze":
         text = str(request.hints.get("request", ""))
         allowed = {r.lower() for r in request.hints.get("allowed_repos", [])}

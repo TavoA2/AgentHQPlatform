@@ -190,7 +190,7 @@ export type MetricsSummary = {
   jobs_by_status: Record<string, number>;
   recent_failed_jobs: {
     id: number;
-    task_id: string;
+    task_id: string | null;
     kind: string;
     attempts: number;
     last_error: string | null;
@@ -293,3 +293,50 @@ export type AgentActivity = {
 };
 
 export type AgentDetail = Agent & { recent_activity: AgentActivity[]; pending_approvals: number };
+
+// --- chat with Dixon (ADR-0015) ---
+export type ChatProposal = {
+  id: string;
+  project_id: string;
+  project_key: string;
+  title: string;
+  request: string;
+  acceptance_criteria: string[];
+  status: "proposed" | "accepted";
+  task_id: string | null;
+};
+
+export type ChatToolCall = {
+  name: string;
+  arguments: Record<string, unknown>;
+  ok: boolean;
+  denied: boolean;
+  error: string | null;
+};
+
+export type ChatMessage = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  status: "pending" | "complete" | "failed";
+  tool_calls: ChatToolCall[];
+  proposals: ChatProposal[];
+  error: string | null;
+  model_provider: string | null;
+  model_name: string | null;
+  tokens_in: number;
+  tokens_out: number;
+  cost_usd: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
+export type Conversation = {
+  id: string;
+  project_id: string | null;
+  title: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConversationDetail = Conversation & { messages: ChatMessage[] };

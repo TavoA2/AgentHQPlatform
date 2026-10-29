@@ -19,3 +19,4 @@ Format: Context → Decision → Consequences. Status is `Accepted`, `Proposed` 
 | [0012](0012-the-brain.md) | The Brain: scoped, versioned knowledge with provenance | Accepted |
 | [0013](0013-integrations-and-demo.md) | GitHub App writes, notification outbox, public demo mode | Accepted |
 | [0014](0014-single-vm-deployment.md) | Single-VM AWS deployment: Caddy, SSM, S3 backups, 2FA in production | Accepted |
+| [0015](0015-chat-with-dixon.md) | Chat with Dixon: worker-run turns, read-only tools, human-confirmed task proposals | Accepted |
