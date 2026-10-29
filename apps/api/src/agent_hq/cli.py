@@ -154,6 +154,8 @@ def main() -> None:
             host=args.host,
             port=args.port,
             reload=args.reload,
+            # Open SSE streams would otherwise block shutdown and reloads indefinitely.
+            timeout_graceful_shutdown=5,
             loop=LOOP,
             log_config=None,
         )

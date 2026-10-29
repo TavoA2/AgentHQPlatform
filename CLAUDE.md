@@ -6,7 +6,7 @@ Read [docs/product-brief.md](docs/product-brief.md) first. Architecture lives in
 ## Working rules
 
 - Work sprint by sprint. Do not start the next sprint without explicit approval from the
-  owner. Current sprint: **Sprint 3 complete (pending owner review); Sprint 4 not approved.**
+  owner. Current sprint: **Sprint 4 complete (pending owner review); Sprint 5 not approved.**
   The CIO agent is presented as "Dixon". A conversational, JARVIS-style assistant (chat,
   proactive alerts, voice, WhatsApp) is deferred by the owner to a later sprint.
 - A change that contradicts an ADR needs a new ADR that supersedes it, not a silent

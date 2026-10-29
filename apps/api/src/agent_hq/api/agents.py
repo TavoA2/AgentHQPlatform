@@ -1,14 +1,16 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_hq.agents import REGISTRY
 from agent_hq.api.deps import DbDep, PrincipalDep
-from agent_hq.api.schemas import AgentOut, execution_out
-from agent_hq.domain import AgentStatus, ExecutionStatus, TaskStatus
-from agent_hq.models import Agent, Task, TaskExecution
+from agent_hq.api.schemas import AgentOut, ExecutionOut, execution_out
+from agent_hq.domain import AgentStatus, ApprovalStatus, ExecutionStatus, TaskStatus
+from agent_hq.models import Agent, ApprovalRequest, Task, TaskExecution
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -63,3 +65,58 @@ async def derive_agent_statuses(db: AsyncSession) -> list[AgentOut]:
 @router.get("")
 async def list_agents(_: PrincipalDep, db: DbDep) -> list[AgentOut]:
     return await derive_agent_statuses(db)
+
+
+class AgentActivity(BaseModel):
+    execution: ExecutionOut
+    task_id: uuid.UUID
+    task_title: str
+    task_status: TaskStatus
+    parent_task_id: uuid.UUID | None
+
+
+class AgentDetailOut(AgentOut):
+    recent_activity: list[AgentActivity]
+    pending_approvals: int
+
+
+@router.get("/{key}")
+async def agent_detail(
+    key: str,
+    _: PrincipalDep,
+    db: DbDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> AgentDetailOut:
+    """Status, recent executions (with their tasks) and approvals this agent waits on."""
+    agent = next((a for a in await derive_agent_statuses(db) if a.key == key), None)
+    if agent is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "agent not found")
+    keys = {a.id: a.key for a in await db.scalars(select(Agent))}
+    rows = await db.execute(
+        select(TaskExecution, Task)
+        .join(Task, Task.id == TaskExecution.task_id)
+        .join(Agent, Agent.id == TaskExecution.agent_id)
+        .where(Agent.key == key)
+        .order_by(TaskExecution.started_at.desc())
+        .limit(limit)
+    )
+    pending = await db.scalar(
+        select(func.count())
+        .select_from(ApprovalRequest)
+        .join(Agent, Agent.id == ApprovalRequest.requested_by_agent_id)
+        .where(Agent.key == key, ApprovalRequest.status == ApprovalStatus.PENDING)
+    )
+    return AgentDetailOut(
+        **agent.model_dump(),
+        recent_activity=[
+            AgentActivity(
+                execution=execution_out(execution, keys),
+                task_id=task.id,
+                task_title=task.title,
+                task_status=task.status,
+                parent_task_id=task.parent_task_id,
+            )
+            for execution, task in rows
+        ],
+        pending_approvals=int(pending or 0),
+    )

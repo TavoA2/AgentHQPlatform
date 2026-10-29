@@ -1,28 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { OfficeFloor } from "@/components/office";
-import { Card, ErrorNote, TaskStatusBadge, formatTime } from "@/components/ui";
+import { OfficeView } from "@/components/office/office-view";
+import { Card, TaskStatusBadge, formatTime } from "@/components/ui";
 import { useApi } from "@/lib/api";
 import { useLiveRefresh } from "@/lib/live-events";
-import type { Agent, Task } from "@/lib/types";
+import type { Task } from "@/lib/types";
 
 export default function OfficePage() {
-  const agents = useApi<Agent[]>("/agents");
   const tasks = useApi<Task[]>("/tasks?limit=8");
-  useLiveRefresh(agents.reload);
   useLiveRefresh(tasks.reload, (e) => e.type === "status_changed");
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold">Office</h1>
-        <p className="text-sm text-muted">
-          Live agent status from real executions. The interactive 3D office arrives in Sprint 4.
-        </p>
+
       </div>
-      <ErrorNote message={agents.error} />
-      {agents.data && <OfficeFloor agents={agents.data} />}
+      <OfficeView />
       <Card title="Recent tasks" actions={<Link href="/tasks" className="text-sm text-cyan">All tasks →</Link>}>
         {tasks.data?.length ? (
           <ul className="divide-y divide-border">

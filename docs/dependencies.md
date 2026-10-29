@@ -3,7 +3,7 @@
 Source of truth is the lockfiles (`apps/api/uv.lock`, `apps/web/package-lock.json`).
 This table records the direct dependencies as resolved and verified together.
 
-Last verified: 2026-10-28 (Sprint 3) — lint, typecheck, 171 backend tests against
+Last verified: 2026-10-28 (Sprint 4) — lint, typecheck, 172 backend tests against
 PostgreSQL 17 (including the real Docker sandbox test), web build and the full Docker
 Compose stack passing. Sandbox image: python:3.13-slim + pytest 9.2.0.
 
@@ -43,6 +43,9 @@ Compose stack passing. Sandbox image: python:3.13-slim + pytest 9.2.0.
 | tailwindcss | 4.3.3 |
 | typescript | 5.9.3 |
 | eslint | 9.39.5 |
+| three | 0.186.1 |
+| @react-three/fiber | 9.8.2 |
+| @react-three/drei | 10.7.9 |
 
 ## Known notes
 

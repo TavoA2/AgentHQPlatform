@@ -157,5 +157,6 @@ async def stream(
             is_disconnected=request.is_disconnected,
         ),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        # no-transform stops proxies (including the Next.js gzip layer) from buffering.
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )

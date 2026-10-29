@@ -4,7 +4,8 @@ Internal AI virtual operations platform for **Veltrix Labs** (provisional brand)
 administrator supervises specialized AI agents that plan, execute and report real work,
 with human approval for sensitive actions.
 
-> Status: **Sprint 3 — The Brain.** Agents now share scoped, versioned company and project
+> Status: **Sprint 4 — interactive 3D office** (with an accessible 2D view) on top of
+> **Sprint 3 — The Brain.** Agents now share scoped, versioned company and project
 > knowledge with provenance; what they write stays unverified until you approve it.
 > The AI CIO, **Dixon** (LangGraph), routes each
 > request to a workflow and delegates it as subtasks: a DevOps agent reviews CI/CD, or a
@@ -81,4 +82,5 @@ Full setup, host-based development and verification commands:
 - [Threat model](docs/security/threat-model.md) · [Permission matrix](docs/security/permission-matrix.md)
 - [Decisions (ADRs)](docs/decisions/README.md) · [Dependencies](docs/dependencies.md)
 - Acceptance and evidence: [Sprint 1](docs/sprints/sprint-1-acceptance.md) ·
-  [Sprint 2](docs/sprints/sprint-2-acceptance.md) · [Sprint 3](docs/sprints/sprint-3-acceptance.md)
+  [Sprint 2](docs/sprints/sprint-2-acceptance.md) · [Sprint 3](docs/sprints/sprint-3-acceptance.md) ·
+  [Sprint 4](docs/sprints/sprint-4-acceptance.md)

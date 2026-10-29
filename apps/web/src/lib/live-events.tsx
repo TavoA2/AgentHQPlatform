@@ -71,8 +71,8 @@ export function useLiveRefresh(reload: () => void, filter?: (event: TaskEvent) =
   }, [subscribe]);
 }
 
-/** Collects events for one task as they stream in. */
-export function useTaskEventFeed(taskId: string, onEvent: (event: TaskEvent) => void) {
+/** Calls `onEvent` for events of one task (or of every task when `taskId` is null). */
+export function useTaskEventFeed(taskId: string | null, onEvent: (event: TaskEvent) => void) {
   const { subscribe } = useContext(LiveEventsContext);
   const handler = useRef(onEvent);
   useEffect(() => {
@@ -81,7 +81,7 @@ export function useTaskEventFeed(taskId: string, onEvent: (event: TaskEvent) => 
   useEffect(
     () =>
       subscribe((event) => {
-        if (event.task_id === taskId) handler.current(event);
+        if (taskId === null || event.task_id === taskId) handler.current(event);
       }),
     [subscribe, taskId],
   );

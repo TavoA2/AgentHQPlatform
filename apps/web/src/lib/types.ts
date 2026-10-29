@@ -283,3 +283,13 @@ export type KnowledgeVersion = {
 };
 
 export type KnowledgeDetail = KnowledgeDoc & { versions: KnowledgeVersion[] };
+
+export type AgentActivity = {
+  execution: Execution;
+  task_id: string;
+  task_title: string;
+  task_status: TaskStatus;
+  parent_task_id: string | null;
+};
+
+export type AgentDetail = Agent & { recent_activity: AgentActivity[]; pending_approvals: number };
